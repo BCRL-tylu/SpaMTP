@@ -1,4 +1,4 @@
-#' @estimate_mz_resolution_error 
+#' @estimate_mz_resolution_error
 # This is an application estimate the actual mass accuracy of your maldi data
 #' @param mass_matrix is a matrix like object with each row corresponding to a pixel, and each column corresponding to a m/z value (Colnames = m/z values), support sparse/dense matrix,m each cell is the intensity of at the pixel; Note that the mass matrix should be half-processed, which means not filtered against any background signals, but undergoes normalization and baseline correction
 #' @param matrix_molecule is either a single numerical value, representing the molecular mass of the matrix, or the chemical ID (chebi,HMDB,CAS,pubchem,Kegg, chemspider). If mutiple matrix is used as mixed, please use this function for individual ones
@@ -15,6 +15,19 @@
 # mass_matrix_dense = mass_matrix_dense[,-1]
 # colnames(mass_matrix_dense) = sub("X","",colnames(mass_matrix_dense))
 
+
+load_compressed_data <- function(name) {
+  exdir = "./inst/tmp"
+  unzip("./data/query_data.zip", exdir = exdir)
+  if (grepl(name,
+            pattern = ".rds")) {
+    data <- readRDS(file.path(exdir, name))
+  } else{
+    load(file.path(exdir, name))
+  }
+  return(data)
+}
+
 estimate_mz_resolution_error = function(mass_matrix,
                                         matrix_molecule,
                                         ion_mode,
@@ -22,35 +35,47 @@ estimate_mz_resolution_error = function(mass_matrix,
                                         use_colnames_as_mz = T,
                                         mass_resolution = 30000,
                                         mz_vector = NULL,
-                                        quantile = 0.9){
+                                        quantile = 0.9,
+                                        plot = T) {
   #(1) Converting matrix to sparse matrix when necessary
   require(Matrix)
-  if(sparse == T){
+  if (sparse == T) {
     print("Converting dense matrix to sparse matrix")
     mass_matrix = Matrix(as.matrix(mass_matrix), sparse = TRUE)
     print("Conversion finished")
   }
   #(2) Get lsit of m/z values
-  if(use_colnames_as_mz == T){
-      tryCatch({
-        mz_list = as.numeric(colnames(mass_matrix))
-      },
-      error = function(cond){
-        stop("Error occurred: ", conditionMessage(cond),
-             message("Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
-              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"))
-      },
-      warning = function(cond){
-        stop("Error occurred: ", conditionMessage(cond),
-             message("Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
-              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"))
-      }
+  if (use_colnames_as_mz == T) {
+    tryCatch({
+      mz_list = as.numeric(colnames(mass_matrix))
+    },
+    error = function(cond) {
+      stop(
+        "Error occurred: ",
+        conditionMessage(cond),
+        message(
+          "Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
+              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"
+        )
       )
-  }else if(!is.null(mz_vector)){
+    },
+    warning = function(cond) {
+      stop(
+        "Error occurred: ",
+        conditionMessage(cond),
+        message(
+          "Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
+              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"
+        )
+      )
+    })
+  } else if (!is.null(mz_vector)) {
     mz_list = as.numeric(mz_vector)
-  }else{
-    stop("Cannot find list of screened m/z ratioes.
-         Check if m/z ratio vector or colnames of input matrix is correctly input!")
+  } else{
+    stop(
+      "Cannot find list of screened m/z ratioes.
+         Check if m/z ratio vector or colnames of input matrix is correctly input!"
+    )
   }
   #(3) query for all possible m/z for matrix molecule
   source("./R/fct_db_adduct_filter.R")
@@ -59,68 +84,82 @@ estimate_mz_resolution_error = function(mass_matrix,
   #### Load the Cleaned and summarized DB ####
   # require krish's DB
   print("Loading query databases...")
-  adduct_file = readRDS(".QIMR_project/inst/adduct_file.rds")
-  load(file = "./data/chem_props.rda")
+  adduct_file = readRDS("./data/adduct_file.rds")
+  chem_props = load_compressed_data("chem_props.rds")
   print("Database loading finished.")
-  
+
   #(4) Determine the polarity for adducts
-  
-  if(is.numeric(matrix_molecule)){
-    matrix_molecule = matrix_molecule
-  }else{
+
+  if (is.numeric(as.numeric(matrix_molecule)) &
+      (!is.na(as.numeric(matrix_molecule)))) {
+    matrix_molecule = as.numeric(matrix_molecule)
+  } else{
     # query for the give id
-    matrix_molecule = as.numeric(chem_props$monoisotop_mass[which(grepl(chem_props$chem_source_id,
-                       pattern = matrix_molecule,
-                       ignore.case = T))][1])
-    if(length(matrix_molecule) == 0 ){
+    matrix_molecule = as.numeric(chem_props$monoisotop_mass[which(grepl(
+      chem_props$chem_source_id,
+      pattern = matrix_molecule,
+      ignore.case = T
+    ))][1])
+    if (length(matrix_molecule) == 0) {
       stop("Check if correct matrix molecule id is input")
     }
   }
-    if(ion_mode == "positive"){
-      positive_adducts = adduct_file[which(adduct_file$pol == "pos"),]
-      formulas = gsub("([0-9])([A-Za-z])", "\\1*\\2",  positive_adducts$ion.mass)
-      M = matrix_molecule
-      potential_mz = c(sapply(formulas, function(x) eval(parse(text = x))))
-      names(potential_mz) = positive_adducts$adduct_name
-    }else if(ion_mode == "negative"){
-      negative_adducts = adduct_file[which(adduct_file$pol == "neg"),]
-      formulas = gsub("([0-9])([A-Za-z])", "\\1*\\2",  negative_adducts$ion.mass)
-      M = matrix_molecule
-      potential_mz = c(sapply(formulas, function(x) eval(parse(text = x))))
-      names(potential_mz) = negative_adduct$adduct_name
-    }else{
-      print("Please enter the correct ion mode from following: 'positive' or 'negative'")
-    }
-  closest_peaks = lapply(potential_mz, function(x){
-    id = which.min(abs(x-mz_list))
+  if (ion_mode == "positive") {
+    positive_adducts = adduct_file[which(adduct_file$pol == "pos"), ]
+    formulas = gsub("([0-9])([A-Za-z])",
+                    "\\1*\\2",
+                    positive_adducts$ion.mass)
+    M = matrix_molecule
+    potential_mz = c(sapply(formulas, function(x)
+      eval(parse(text = x))))
+    names(potential_mz) = positive_adducts$adduct_name
+  } else if (ion_mode == "negative") {
+    negative_adducts = adduct_file[which(adduct_file$pol == "neg"), ]
+    formulas = gsub("([0-9])([A-Za-z])",
+                    "\\1*\\2",
+                    negative_adducts$ion.mass)
+    M = matrix_molecule
+    potential_mz = c(sapply(formulas, function(x)
+      eval(parse(text = x))))
+    names(potential_mz) = negative_adduct$adduct_name
+  } else{
+    print("Please enter the correct ion mode from following: 'positive' or 'negative'")
+  }
+  closest_peaks = lapply(potential_mz, function(x) {
+    id = which.min(abs(x - mz_list))
     closest_mz = mz_list[id]
-    error_mz = (x-mz_list)[id]
-    error_ppm = abs(error_mz)/matrix_molecule*1e6
-    closest_peak_intensity = mean(mass_matrix[,id])
-    closest_return = c(matched_mz_id= id,
-                      closest_mz = closest_mz,
-                      error_mz = error_mz,
-                      error_ppm = error_ppm,
-                      closest_peak_intensity =  closest_peak_intensity)
+    error_mz = (x - mz_list)[id]
+    error_ppm = abs(error_mz) / matrix_molecule * 1e6
+    closest_peak_intensity = mean(as.numeric(mass_matrix[, id]))
+    closest_return = c(
+      matched_mz_id = id,
+      closest_mz = closest_mz,
+      error_mz = error_mz,
+      error_ppm = error_ppm,
+      closest_peak_intensity =  closest_peak_intensity
+    )
     return(closest_return)
   })
   # Calculate full_width at half height
-  fwhm = matrix_molecule/mass_resolution
-  intensities = colSums(mass_matrix)
-  potential_matrix_peak_indices <- which(intensities >= quantile(intensities, probs =quantile))
-  
-  filtered_closest_peaks = as.data.frame(do.call(rbind,lapply(closest_peaks, function(x){
-    if((x[1] %in% potential_matrix_peak_indices) & abs(x[3])<=3*fwhm){
+  fwhm = matrix_molecule / mass_resolution
+  intensities = Matrix::colSums(mass_matrix)
+  potential_matrix_peak_indices <-
+    which(intensities >= quantile(intensities, probs = quantile))
+
+  filtered_closest_peaks = as.data.frame(do.call(rbind, lapply(closest_peaks, function(x) {
+    if ((x[1] %in% potential_matrix_peak_indices) & abs(x[3]) <= 3 * fwhm) {
       return(x)
-    }else{
+    } else{
       return(NULL)
     }
   })))
-  
-  if(nrow(filtered_closest_peaks) == 0){
-    stop("Warnning: no peaks found with given conditions consider increase mass accuracy or decrease quantile.
-         Make sure you enter the correct matrix as well")
-  }else{
+
+  if (nrow(filtered_closest_peaks) == 0) {
+    stop(
+      "Warnning: no peaks found with given conditions consider increase mass accuracy or decrease quantile.
+         Make sure you enter the correct matrix as well (The matrix should not be cleaned for background signals)"
+    )
+  } else{
     # print result
     require(ggplot2)
     require(fitdistrplus)
@@ -128,19 +167,51 @@ estimate_mz_resolution_error = function(mass_matrix,
     print("Plotting matched adducted molecules with their corresponding mass error")
     plotdf  = cbind(filtered_closest_peaks,
                     adduct_status = rownames(filtered_closest_peaks))
-    plot = ggplot(plotdf, aes(x = error_mz, y = closest_peak_intensity)) +
-      geom_histogram(stat = "identity", fill = "skyblue", color = "black", bins = 10) +
-      labs(x = "Error (m/z, unit: u)", y = "Peak Intensity") +
-      geom_text(aes(y = closest_peak_intensity, label = adduct_status),position = "stack", vjust = -0.5, size = 3.5, color = "black")+
-      geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
-      theme_minimal()
-    suppressWarnings(print(plot))
+    if (plot == T) {
+      suppressWarnings({
+        plot = ggplot(plotdf, aes(x = error_mz, y = closest_peak_intensity)) +
+          geom_histogram(
+            stat = "identity",
+            fill = "skyblue",
+            color = "black",
+            bins = 10
+          ) +
+          labs(x = "Error (m/z, unit: u)", y = "Peak Intensity") +
+          geom_text(
+            aes(
+              y = closest_peak_intensity,
+              label = paste0(
+                adduct_status,
+                "\n Error ppm:",
+                round(error_ppm,
+                      digits = 3)
+              )
+            ),
+            position = "stack",
+            vjust = -0.5,
+            size = 3.5,
+            color = "black"
+          ) +
+          geom_vline(
+            xintercept = 0,
+            linetype = "dashed",
+            color = "blue"
+          ) +
+          theme_minimal() + ylim(c(0, 1.3 * max(plotdf$closest_peak_intensity))) +
+          xlim(c(min(0,
+                     1.2 *
+                       min(
+                         plotdf$error_mz
+                       )),
+                 max(0, 1.2 *
+                       max(
+                         plotdf$error_mz
+                       ))))
+      })
+      suppressWarnings(print(plot))
+
+    }
     print("Finished")
     return(plotdf)
   }
 }
-
-
-
-
-

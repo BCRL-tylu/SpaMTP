@@ -1,3 +1,4 @@
+library(fields)
 #' @svd_analysis
 #' @description  This is an application that use single value decomposition to evaluate the potential importance of specific m/z values by analyzing the singular values of the original features. It integrate multiple image processing techniques to filter the noise and improve effiency of SVD calculation.
 #' @param mass_matrix is a matrix like object with each row corresponding to a pixel, and each column corresponding to a m/z value (Colnames = m/z values), support sparse/dense matrix,m each cell is the intensity of at the pixel; Note that the mass matrix should be cleaned against backgrounds and potential artifacts
@@ -15,8 +16,8 @@
 #' @param resampling_factor A numerical value bigger than 0 to indicate the extend you want to resample you images, for example if you want to resize a 200x200 image into 100x100, you should input 2 in this case, and 0.5 for the reverse case
 #' @param variance_explained Is a numeric value between 0 and 1 which indicates the cut-off variance explained by singular vectors from svd analysis
 
-#' @return characteristic_mz_matices: is a dataframe contains the most influential m/z values on the singular values 
-#' @return svd: is single value decomposition analysis result, referred to base::svd 
+#' @return characteristic_mz_matices: is a dataframe contains the most influential m/z values on the singular values
+#' @return svd: is single value decomposition analysis result, referred to base::svd
 #' @return new_width,new_height: the new dimension of data after transformation
 #' @return kernel_size,resampling_factor,use_gaussian_blur,sigma: are the parameters that input by user
 
@@ -40,22 +41,22 @@ svd_analysis = function(mass_matrix,
   mass_matrix = Matrix(mass_matrix,
                        sparse = T)
 
-  
+
   ##########################################################
   ###################Gaussian blur##########################
   ##########################################################
-  
+
   if(use_gaussian_blur  == T & use_paralle == F){
     print("Running gaussian blur")
     require(utils)
-    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3) 
+    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
     blur_matrix = matrix(nrow = width*height)
-    source("./network_based_pathway_ananlysis/gaussian_blur.R")
+    source("./R/gaussian_blur.R")
     for(i in 1:ncol(mass_matrix)){
       temp_mz_matrix = matrix(mass_matrix[,i],
                               ncol = width,
                               nrow = height, byrow = T)
-      blured_temp = gaussian_blur(temp_mz_matrix, 
+      blured_temp = gaussian_blur(temp_mz_matrix,
                                   sigma = sigma,
                                   kernel_size = kernel_size,
                                   return_vector = T)
@@ -67,20 +68,20 @@ svd_analysis = function(mass_matrix,
     close(pb)
     print("Guassian Blur finished")
   }
-  
+
   if(use_gaussian_blur == T & use_paralle == T){
     print("Running gaussian blur on parallel cores")
     require(parallel)
     require(parallelly)
     print("Making cluster on your aviliable cores")
     if(is.null(num_cores)){
-      n.cores = parallelly::availableCores()
+      n.cores = parallelly::availableCores()/2
     }else if(is.numeric(num_cores) == T){
       n.cores = as.integer(num_cores)
     }else{
       stop("Please enter correct number of cores 'num_cores'")
     }
-    source("./network_based_pathway_ananlysis/gaussian_blur.R")
+    source("./R/gaussian_blur.R")
     clust <- makeCluster(n.cores)
     clusterExport(clust, varlist = c("mass_matrix",
                                      "gaussian_blur",
@@ -93,7 +94,7 @@ svd_analysis = function(mass_matrix,
       temp_mz_matrix = matrix(x,
                               ncol = width,
                               nrow = height, byrow = T)
-      blured_temp = gaussian_blur(temp_mz_matrix, 
+      blured_temp = gaussian_blur(temp_mz_matrix,
                                   sigma = sigma,
                                   kernel_size = kernel_size,
                                   return_vector = T)
@@ -113,45 +114,45 @@ svd_analysis = function(mass_matrix,
     mfac <- (newrange[2]-newrange[1])/(xrange[2]-xrange[1])
     newrange[1]+(x-xrange[1])*mfac
   }
-  
+
   ResizeMat <- function(mat, ndim=dim(mat)){
     if(!require(fields)) stop("`fields` required.")
-    
+
     # input object
     odim <- dim(mat)
     obj <- list(x= 1:odim[1], y=1:odim[2], z= mat)
-    
+
     # output object
     ans <- matrix(NA, nrow=ndim[1], ncol=ndim[2])
     ndim <- dim(ans)
-    
+
     # rescaling
     ncord <- as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
     loc <- ncord
     loc[,1] = rescale(ncord[,1], c(1,odim[1]))
     loc[,2] = rescale(ncord[,2], c(1,odim[2]))
-    
+
     # interpolation
     ans[ncord] <- interp.surface(obj, loc)
     ans
   }
-  
+
   if(use_gaussian_blur == T){
     blur_matrix = Matrix::Matrix(blur_matrix,
                                  sparse = T)
   }else{
     blur_matrix = mass_matrix
   }
-  
+
   if(!is.null(resampling_factor)){
     print("Running matrix resampling")
-    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3) 
+    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
     if(!is.numeric(resampling_factor)){
       stop("Please enter correct resampling_factor")
     }
     new.width = as.integer(width/resampling_factor)
     new.height = as.integer(height/resampling_factor)
-    
+
     resampled_mat = matrix(nrow =  new.height*new.width)
     for(i in 1:ncol(blur_matrix)){
       temp_mz_matrix = matrix(blur_matrix[,i],
@@ -168,7 +169,7 @@ svd_analysis = function(mass_matrix,
     print("Resampling finished!")
     gc()
   }
-  
+
   # if(!is.null(resampling_factor) & use_paralle == T){
   #   if(!is.numeric(resampling_factor)){
   #     stop("Please enter correct resampling_factor")
@@ -200,7 +201,7 @@ svd_analysis = function(mass_matrix,
   #   colnames(resampled_mat) =colnames(blur_matrix)
   #   print("Resampling finished!")
   # }
-  
+
   ###################################################
   #####################SVD###########################
   ###################################################
@@ -210,7 +211,7 @@ svd_analysis = function(mass_matrix,
     new.height = height
     sigma = NULL
   }
-  
+
   if(randomised_svd == F){
     print("Running exact matrix single value decomposition")
     svd = svd(resampled_mat)
@@ -272,7 +273,7 @@ svd_analysis = function(mass_matrix,
       image
     }
   }
-  
+
   returned_item = list(characteristic_mz_matices = resampled_mat[,order(value_matrix,decreasing = T)],
                        svd = svd,
                        randomised_svd = randomised_svd,

@@ -1,7 +1,7 @@
 #' @runFisherTest
 #' @description
 #' This the function used to compute the exact fisher test for over-represntation based pathway analysis
-#' 
+#'
 
 #' @param Analytes IDs in following format: "db source: ID", for example ""ensembl:ENSG00000135679", "hmdb:HMDB0000064""
 #' @param analyte_type = "metabolites" or "genes" or "both"
@@ -10,25 +10,39 @@
 #' @param alternative The hypothesis of the fisher exact test
 
 #' @return a dataframe with the relevant pathway information
-
+load_compressed_data <- function(name) {
+  exdir = "./inst/tmp"
+  if(length(list.files(path =  exdir,
+                       pattern = name)) == 0){
+    unzip("./data/query_data.zip", exdir = exdir)
+  }
+  if (grepl(name,
+            pattern = ".rds")) {
+    data <- readRDS(file.path(exdir, name))
+  } else{
+    load(file.path(exdir, name))
+  }
+  return(data)
+}
 runFisherTest = function (analytes, analyte_type = "metabolites",
-           alternative = "greater", min_path_size = 5, max_path_size = 150) 
+           alternative = "greater", min_path_size = 5, max_path_size = 150)
 {
   require(dplyr)
   now <- proc.time()
   print("Fisher Testing ......")
   pathwayRampId <- rampId <- c()
   # Get the RaMP ids for metabolites/genes
-  
+
   print("Loading files ......")
-  load(file = "./data/analytehaspathway.rda")
-  load(file = "./data/pathway.rda")
-  load(file = "./data/source.rda")
-  load(file = "./data/chem_props.rda")
-  load(file = "./data/analyte.rda")
-  load(file = "./data/pathway.rda")
+  load_compressed_data("analytehaspathway.rda")
+  load_compressed_data("pathway.rda")
+  load_compressed_data("source.rda")
+  load_compressed_data("chem_props.rds")
+  load_compressed_data("analyte.rda")
+  load_compressed_data("pathway.rda")
+
   print("Loading files finished!")
-  
+
   if(analyte_type == "metabolites"){
     source = source[which(grepl(source$rampId, pattern = "RAMP_C") == T),]
     analytehaspathway = analytehaspathway[which(grepl(analytehaspathway$rampId, pattern = "RAMP_C") == T),]
@@ -40,7 +54,7 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
   } else {
     stop("analyte_type was not specified correctly.  Please specify one of the following options: metabolites, genes")
   }
- 
+
   # Pathway enrichment
   if(analyte_type == "metabolites"){
     #####################################
@@ -50,24 +64,24 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
   analytes_rampids = unique(source$rampId[which(source$sourceId %in% analytes)])
   # (1) Get candidate pathways
   # Get all analytes and number of analytes within a specific pathway
-  
+
   pathway_rampids = analytehaspathway[which(analytehaspathway$rampId %in% analytes_rampids),] %>% rowwise() %>%
-    mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>% 
+    mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>%
     count(pathwayRampId,
           ananlytes_id_list,
           sort = T,
           name = "analytes_in_pathways")
-  
+
   pathway_rampids = pathway_rampids %>%  mutate(screened_analytes = list(ananlytes_id_list[which(ananlytes_id_list %in% analytes_rampids)]))
   # (2) Get total analytes in each pathway
-  total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId),] %>% 
+  total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId),] %>%
     count(pathwayRampId,
           name = "total_in_pathways")
   # (3) Creare a df that store the enrichment square for each pathways
   enrichment_df = merge(total_in_pathways,
                         pathway_rampids,
-                        by = "pathwayRampId") %>% 
-    mutate(total_analytes = length(unique(analytes_rampids))) 
+                        by = "pathwayRampId") %>%
+    mutate(total_analytes = length(unique(analytes_rampids)))
   # (4) Conduct pathway enrichment
   total_in_selected_pathways = length(unique(analytehaspathway$rampId))
   print("Calculating p value......")
@@ -83,7 +97,7 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
   enrichment_df_with_info = merge(enrichment_df,
         pathway[which(pathway$pathwayRampId %in% enrichment_df$pathwayRampId),],
         by = "pathwayRampId") %>% filter(!duplicated(pathwayName))
-  
+
   # (6) Append metabolites information to the original df
   # Paste back the original Ids
   print("Formatting outputs ......")
@@ -94,7 +108,7 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
   }))
   # (7) Reduce the dataframe with respected to the User input pathway size
   enrichment_df_with_both_info = cbind(enrichment_df_with_info,
-                                       metabolites_information) %>% filter(total_in_pathways<= max_path_size & 
+                                       metabolites_information) %>% filter(total_in_pathways<= max_path_size &
                                                                            total_in_pathways>= min_path_size)
   print("Done")
   return(enrichment_df_with_both_info)
@@ -107,21 +121,21 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
     # (1) Get candidate pathways
     # Get all analytes and number of analytes within a specific pathway
     pathway_rampids = analytehaspathway[which(analytehaspathway$rampId %in% analytes_rampids),] %>% rowwise() %>%
-      mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>% 
+      mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>%
       count(pathwayRampId,
             ananlytes_id_list,
             sort = T,
             name = "analytes_in_pathways")
     pathway_rampids = pathway_rampids %>%  mutate(screened_analytes = list(ananlytes_id_list[which(ananlytes_id_list %in% analytes_rampids)]))
     # (2) Get total analytes in each pathway
-    total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId),] %>% 
+    total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId),] %>%
       count(pathwayRampId,
             name = "total_in_pathways")
     # (3) Creare a df that store the enrichment square for each pathways
     enrichment_df = merge(total_in_pathways,
                           pathway_rampids,
-                          by = "pathwayRampId") %>% 
-      mutate(total_analytes = length(unique(analytes_rampids))) 
+                          by = "pathwayRampId") %>%
+      mutate(total_analytes = length(unique(analytes_rampids)))
     # (4) Conduct pathway enrichment
     total_in_selected_pathways = length(unique(analytehaspathway$rampId))
     print("Calculating p value......")
@@ -137,7 +151,7 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
     enrichment_df_with_info = merge(enrichment_df,
                                     pathway[which(pathway$pathwayRampId %in% enrichment_df$pathwayRampId),],
                                     by = "pathwayRampId") %>% filter(!duplicated(pathwayName))
-    
+
     # (6) Append metabolites information to the original df
     print("Formatting outputs ......")
     genes_information  =  do.call(rbind,lapply(enrichment_df_with_info$ananlytes_id_list, function(x){
@@ -149,7 +163,7 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
     }))
     # (7) Reduce the dataframe with respected to the User input pathway size
     enrichment_df_with_both_info = cbind(enrichment_df_with_info,
-                                         metabolites_information)%>% filter(total_in_pathways<= max_path_size & 
+                                         metabolites_information)%>% filter(total_in_pathways<= max_path_size &
                                                                            total_in_pathways>= min_path_size)
     print("Done")
     return(enrichment_df_with_both_info)
