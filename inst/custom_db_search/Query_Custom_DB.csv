@@ -1,0 +1,115 @@
+row_id,mz,Formula,rt.min,HMDBID,KEGGID
+Unknown,55.05423,C4 H6,12.903,Dummy1,Dummy1
+Isoprene,69.06987,C5 H8,11.475,Dummy2,Dummy2
+2-Methylpropionitrile,70.06506,C4 H7 N,13.165,Dummy3,Dummy3
+Unknown,72.08069,C4 H9 N,12.902,Dummy4,Dummy4
+Aminoacetone,74.06,C3 H7 N O,15.222,Dummy5,Dummy5
+2-Mercaptoethanol,79.02118,C2 H6 O S,6.707,Dummy6,Dummy6
+Unknown,84.04434,C4 H5 N O,15.612,Dummy7,Dummy7
+2-Methylbutyronitrile,84.08073,C5 H9 N,12.694,Dummy8,Dummy8
+Unknown,86.09634,C5 H11 N,11.469,Dummy9,Dummy9
+Unknown,86.09635,C5 H11 N,10.933,Dummy10,Dummy10
+4-Aminobutanal,88.07566,C4 H9 N O,12.815,Dummy11,Dummy11
+Sarcosine,90.05487,C3 H7 N O2,15.398,Dummy12,Dummy12
+Choline,104.10685,C5 H13 N O,21.342,Dummy13,Dummy13
+Choline,104.1069,C5 H13 N O,14.551,Dummy14,Dummy14
+Unknown,111.0553,C5 H6 N2 O,12.191,Dummy15,Dummy15
+Cytosine,112.05055,C4 H5 N3 O,11.745,Dummy16,Dummy16
+Caprolactam,114.0913,C6 H11 N O,5.203,Dummy17,Dummy17
+L-Proline,116.07044,C5 H9 N O2,13.157,Dummy18,Dummy18
+L-Homoserine,120.06538,C4 H9 N O3,15.213,Dummy19,Dummy19
+L-Threonine,120.06543,C4 H9 N O3,7.117,Dummy20,Dummy20
+L-Threonine,120.06591,C4 H9 N O3,15.204,Dummy21,Dummy21
+Unknown,120.08063,C8 H9 N,10.236,Dummy22,Dummy22
+Unknown,122.08098,C4 H11 N O3,15.783,Dummy23,Dummy23
+Niacinamide,123.05523,C6 H6 N2 O,6.889,Dummy24,Dummy24
+Nicotinamide,123.05524,C6 H6 N2 O,14.276,Dummy25,Dummy25
+Picolinic acid,124.03926,C6 H5 N O2,8.22,Dummy26,Dummy26
+Imidazoleacetic acid,127.05032,C5 H6 N2 O2,12.517,Dummy27,Dummy27
+L-Pyroglutamic acid,130.04968,C5 H7 N O3,15.64,Dummy28,Dummy28
+D-(+)-Pipecolinic acid,130.08605,C6 H11 N O2,22.781,Dummy29,Dummy29
+4-Hydroxyproline,132.06547,C5 H9 N O3,15.047,Dummy30,Dummy30
+L-Isoleucine,132.1017,C6 H13 N O2,10.932,Dummy31,Dummy31
+L-Isoleucine,132.10171,C6 H13 N O2,11.475,Dummy32,Dummy32
+L-Ornithine,133.0969,C5 H12 N2 O2,22.01,Dummy33,Dummy33
+L-Ornithine,133.09712,C5 H12 N2 O2,22.102,Dummy34,Dummy34
+Unknown,134.02695,C4 H7 N O2 S,9.144,Dummy35,Dummy35
+"N,N-Bis(2-hydroxyethyl)formamide",134.08099,C5 H11 N O3,13.879,Dummy36,Dummy36
+N-Hydroxy-L-valine,134.08099,C5 H11 N O3,16.291,Dummy37,Dummy37
+N-Benzylformamide,136.0756,C8 H9 N O,13.711,Dummy38,Dummy38
+Hypoxanthine,137.04555,C5 H4 N4 O,10.673,Dummy39,Dummy39
+4-Aminonicotinic acid,139.05005,C6 H6 N2 O2,7.999,Dummy40,Dummy40
+Urocanic acid,139.05017,C6 H6 N2 O2,11.895,Dummy41,Dummy41
+4-Aminonicotinic acid,139.05027,C6 H6 N2 O2,8.008,Dummy42,Dummy42
+1-Aminocyclohexanecarboxylic acid,144.10175,C7 H13 N O2,10.892,Dummy43,Dummy43
+4-Guanidinobutyric acid,146.09229,C5 H11 N3 O2,15.598,Dummy44,Dummy44
+Unknown,146.1176,C7 H15 N O2,4.284,Dummy45,Dummy45
+DL-Glutamine,147.07503,C5 H10 N2 O3,15.65,Dummy46,Dummy46
+L-Glutamine,147.07616,C5 H10 N2 O3,15.651,Dummy47,Dummy47
+L-Lysine,147.11253,C6 H14 N2 O2,22.803,Dummy48,Dummy48
+L-Glutamic acid,148.05933,C5 H9 N O4,15.495,Dummy49,Dummy49
+L-Glutamic acid,148.06024,C5 H9 N O4,15.519,Dummy50,Dummy50
+Unknown,149.02326,C8 H4 O3,2.948,Dummy51,Dummy51
+trans-Cinnamate,149.05978,C9 H8 O2,10.247,Dummy52,Dummy52
+L-Methionine,150.05815,C5 H11 N O2 S,11.892,Dummy53,Dummy53
+Triethanolamine,150.11233,C6 H15 N O3,9.246,Dummy54,Dummy54
+Guanine,152.05685,C5 H5 N5 O,12.974,Dummy55,Dummy55
+Paracetamol,152.0681,C8 H9 N O2,12.695,Dummy56,Dummy56
+Imidazolelactic acid,157.06036,C6 H8 N2 O3,12.179,Dummy57,Dummy57
+Unknown,159.07633,C6 H10 N2 O3,16.467,Dummy58,Dummy58
+Unknown,160.03459,C6 H10 N P S,13.17,Dummy59,Dummy59
+N5-Methyl-L-glutamine,161.09209,C6 H12 N2 O3,7.304,Dummy60,Dummy60
+Unknown,164.02945,C5 H10 N O P S,15.171,Dummy61,Dummy61
+Unknown,164.07407,C6 H13 N O2 S,4.431,Dummy62,Dummy62
+2-Hydroxycinnamic acid,165.05446,C9 H8 O3,13.711,Dummy63,Dummy63
+Methionine sulfoxide,166.05328,C5 H11 N O3 S,13.832,Dummy64,Dummy64
+L-Phenylalanine,166.08427,C9 H11 N O2,10.295,Dummy65,Dummy65
+L-Phenylalanine,166.08508,C9 H11 N O2,10.261,Dummy66,Dummy66
+Unknown,167.0928,C7 H10 N4 O,7.182,Dummy67,Dummy67
+Pyridoxine (Vitamine B6),170.08095,C8 H11 N O3,8.078,Dummy68,Dummy68
+Pyridoxine,170.08164,C8 H11 N O3,8.08,Dummy69,Dummy69
+N-(2-hydroxyphenyl)acetamide,174.05005,C8 H9 N O2,12.69,Dummy70,Dummy70
+N-Acetyl-L-ornithine,175.10768,C7 H14 N2 O3,5.772,Dummy71,Dummy71
+L-(+)-Arginine,175.11839,C6 H14 N4 O2,24.131,Dummy72,Dummy72
+L-(+)-Citrulline,176.10241,C6 H13 N3 O3,15.898,Dummy73,Dummy73
+Citrulline,176.10275,C6 H13 N3 O3,16.468,Dummy74,Dummy74
+L-Tyrosine,182.08061,C9 H11 N O3,13.729,Dummy75,Dummy75
+L-Tyrosine,182.08097,C9 H11 N O3,13.726,Dummy76,Dummy76
+Unknown,187.10773,C8 H14 N2 O3,11.989,Dummy77,Dummy77
+N6-Acetyl-L-lysine,189.12325,C8 H16 N2 O3,4.897,Dummy78,Dummy78
+N6N6N6-Trimethyl-L-lysine,189.15943,C9 H20 N2 O2,21.411,Dummy79,Dummy79
+N6N6N6-Trimethyl-L-lysine,189.15973,C9 H20 N2 O2,21.444,Dummy80,Dummy80
+Unknown,198.0874,C8 H11 N3 O3,10.808,Dummy81,Dummy81
+Unknown,200.04872,C7 H9 N3 O2 S,9.387,Dummy82,Dummy82
+Hexamethylene diisocyanate,201.12329,C8 H12 N2 O2,6.48,Dummy83,Dummy83
+NN-Dimethylarginine,203.15008,C8 H18 N4 O2,21.176,Dummy84,Dummy84
+Unknown,204.13437,C8 H17 N3 O3,12.024,Dummy85,Dummy85
+L-Tryptophan,205.09714,C11 H12 N2 O2,12.086,Dummy86,Dummy86
+Unknown,206.05515,C3 H8 N7 O2 P,15.414,Dummy87,Dummy87
+Unknown,209.10197,C8 H16 O6,8.152,Dummy88,Dummy88
+Unknown,209.18987,C14 H24 O,3.442,Dummy89,Dummy89
+methyl isoquinoline-3-carboxylate,210.05038,C11 H9 N O2,10.288,Dummy90,Dummy90
+4-Morpholinepropanesulfonic acid,210.07714,C7 H15 N O4 S,7.781,Dummy91,Dummy91
+4-Morpholinepropanesulfonic acid,210.07804,C7 H15 N O4 S,7.782,Dummy92,Dummy92
+4-Morpholinepropanesulfonic acid,210.0788,C7 H15 N O4 S,7.757,Dummy93,Dummy93
+Dethiobiotin,215.13902,C10 H18 N2 O3,9.181,Dummy94,Dummy94
+Unknown,216.04389,C7 H9 N3 O3 S,10.113,Dummy95,Dummy95
+Unknown,217.10451,C6 H12 N6 O3,5.223,Dummy96,Dummy96
+N-?-L-Acetyl-arginine,217.12963,C8 H16 N4 O3,15.023,Dummy97,Dummy97
+Unknown,217.15433,C10 H20 N2 O3,5.99,Dummy98,Dummy98
+?-Glutamyl-L-putrescine,218.14992,C9 H19 N3 O3,16.459,Dummy99,Dummy99
+Pantothenic acid,220.11771,C9 H17 N O5,9.114,Dummy100,Dummy100
+Pantothenic acid,220.11817,C9 H17 N O5,9.106,Dummy101,Dummy101
+NP-017152,226.17993,C13 H23 N O2,2.963,Dummy102,Dummy102
+Unknown,228.15939,C12 H21 N O3,3.982,Dummy103,Dummy103
+Unknown,228.19557,C13 H25 N O2,2.952,Dummy104,Dummy104
+Prolylleucine,229.1545,C11 H20 N2 O3,7.954,Dummy105,Dummy105
+Unknown,234.0196,C6 H9 N3 O3 P2,8.271,Dummy106,Dummy106
+Unknown,234.14475,C9 H19 N3 O4,16.882,Dummy107,Dummy107
+"3-Morpholino-4-tetrahydro-1H-pyrrol-1-ylcyclobut-3-ene-1,2-dione",237.12324,C12 H16 N2 O3,6.912,Dummy108,Dummy108
+"5-(6-hydroxy-6-methyloctyl)-2,5-dihydrofuran-2-one",244.19024,C13 H22 O3,2.963,Dummy109,Dummy109
+"5-(6-hydroxy-6-methyloctyl)-2,5-dihydrofuran-2-one",244.19078,C13 H22 O3,2.957,Dummy110,Dummy110
+"5-(6-hydroxy-6-methyloctyl)-2,5-dihydrofuran-2-one",244.19094,C13 H22 O3,4.255,Dummy111,Dummy111
+Biotin,245.09562,C10 H16 N2 O3 S,9.208,Dummy112,Dummy112
+Unknown,245.17482,C13 H24 O4,4.144,Dummy113,Dummy113
+Unknown,247.11106,C10 H18 N2 O3 S,4.667,Dummy114,Dummy114
