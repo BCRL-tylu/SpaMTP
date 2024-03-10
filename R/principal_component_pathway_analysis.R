@@ -18,7 +18,6 @@ library(pbapply)
 #' @param resampling_factor is a numerical value >0, indicate how you want to resample the size of roginal matrix
 #' @param p_val_threshold is the p value threshold for pathways to be significant
 #' @param biplot is a boolean to indcate whether biplot is included
-#' @param parallel_pca is a boolean to indicate whether use parallel to accelerated PCA
 
 #' @return pca is the pca information of original data
 #' @return pathway_enrichment_pc is the pathway enrichment results for each PC
@@ -51,9 +50,7 @@ principal_component_pathway_analysis = function(mass_matrix,
                                                 variance_explained_threshold = 0.9,
                                                 resampling_factor = 2,
                                                 p_val_threshold = 0.05,
-                                                biplot = F,
-                                                parallel_pca = T,
-                                                num_cores = 8) {
+                                                biplot = F) {
   rescale <- function(x, newrange = range(x)) {
     xrange <- range(x)
     mfac <- (newrange[2] - newrange[1]) / (xrange[2] - xrange[1])
@@ -132,37 +129,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   eigenvectors <- eigen_result$vectors
   eigenvalues <- eigen_result$values
 
-  # Sort eigenvectors by eigenvalues
-  if(parallel_pca == T){
-    print("Running PCA on parallel cores")
-    require(parallel)
-    require(parallelly)
-    print("Making cluster on your aviliable cores")
-    if(is.null(num_cores)){
-      n.cores = parallelly::availableCores()/2
-    }else if(is.numeric(num_cores) == T){
-      n.cores = as.integer(num_cores)
-    }else{
-      stop("Please enter correct number of cores 'num_cores'")
-    }
-
-
-    clust <- makeCluster(n.cores)
-    clusterExport(clust, varlist = c("resampled_mat_standardised",
-                                     "eigenvectors"), envir = environment())
-    pc <- parLapply(clust, split(1:ncol(resampled_mat_standardised), seq_len(ncol(resampled_mat_standardised))) , function(x){
-      temp = resampled_mat_standardised[,1]*eigenvectors[1,x]
-      for(j in 2:ncol(resampled_mat_standardised)){
-        temp =temp+resampled_mat_standardised[,j]*eigenvectors[j,x]
-      }
-      return(temp)
-    })
-    stopCluster(clust)
-    gc()
-    pc = do.call(cbind,pc)
-    rownames(pc) =rownames(resampled_mat_standardised)
-  }else{
-    print("Computing PCA on a single core")
+    print("Computing PCA")
     pc = pbapply::pblapply(1:ncol(resampled_mat_standardised),function(i){
       temp = resampled_mat_standardised[,1]*eigenvectors[1,i]
       for(j in 2:ncol(resampled_mat_standardised)){
@@ -171,7 +138,7 @@ principal_component_pathway_analysis = function(mass_matrix,
       return(temp)
     })
     pc = do.call(cbind,pc)
-  }
+
   # make pca object
   pca = list(sdev = sqrt(eigenvalues),
              rotation = eigenvectors,
@@ -436,6 +403,6 @@ principal_component_pathway_analysis = function(mass_matrix,
   }
   return(list.append(pca = pca,
                      pathway_enrichment_pc = pca_sea_list,
-                     new.width = as.integer(width/resampling_factor),
-                     new.height = as.integer(height/resampling_factor)))
+                     new.width = as.integer(width/as.numeric(resampling_factor)),
+                     new.height = as.integer(height/as.numeric(resampling_factor))))
 }
