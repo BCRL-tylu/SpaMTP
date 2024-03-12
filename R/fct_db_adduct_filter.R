@@ -63,7 +63,7 @@ db_adduct_filter <- function(db, adduct, polarity = "neg") {
 
   # Filter the db by polarity
   db <- db %>%
-    select(formula, exactmass, isomers, isomers_inchikey, isomers_names, pol)
+    dplyr::select(formula, exactmass, isomers, isomers_inchikey, isomers_names, pol)
 
   # in adduct entry
   adduct <- gsub(" ", "", adduct)
@@ -89,7 +89,7 @@ db_adduct_filter <- function(db, adduct, polarity = "neg") {
   adduct <- check_and_truncate_adduct_vector(adduct, db)
 
   db_filtered <- db %>%
-    select(formula,
+    dplyr::select(formula,
            exactmass,
            isomers,
            isomers_inchikey,

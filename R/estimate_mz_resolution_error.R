@@ -16,18 +16,6 @@
 # colnames(mass_matrix_dense) = sub("X","",colnames(mass_matrix_dense))
 
 
-load_compressed_data <- function(name) {
-  exdir = "./inst/tmp"
-  unzip("./data/query_data.zip", exdir = exdir)
-  if (grepl(name,
-            pattern = ".rds")) {
-    data <- readRDS(file.path(exdir, name))
-  } else{
-    load(file.path(exdir, name))
-  }
-  return(data)
-}
-
 estimate_mz_resolution_error = function(mass_matrix,
                                         matrix_molecule,
                                         ion_mode,
@@ -78,14 +66,14 @@ estimate_mz_resolution_error = function(mass_matrix,
     )
   }
   #(3) query for all possible m/z for matrix molecule
-  source("./R/fct_db_adduct_filter.R")
-  source("./R/fct_formula_filter.R")
-  source("./R/fct_proc_db.R")
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_db_adduct_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_formula_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_proc_db.R"))
   #### Load the Cleaned and summarized DB ####
   # require krish's DB
   print("Loading query databases...")
-  adduct_file = readRDS("./data/adduct_file.rds")
-  chem_props = load_compressed_data("chem_props.rds")
+  adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/adduct_file.rds"))
+  chem_props = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/chem_props.rds"))
   print("Database loading finished.")
 
   #(4) Determine the polarity for adducts

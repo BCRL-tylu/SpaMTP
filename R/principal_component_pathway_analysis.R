@@ -23,20 +23,7 @@ library(pbapply)
 #' @return pathway_enrichment_pc is the pathway enrichment results for each PC
 
 
-load_compressed_data <- function(name) {
-  exdir = "./inst/tmp"
-  if(length(list.files(path =  exdir,
-                pattern = name)) == 0){
-    unzip("./data/query_data.zip", exdir = exdir)
-  }
-  if (grepl(name,
-            pattern = ".rds")) {
-    data <- readRDS(file.path(exdir, name))
-  } else{
-    load(file.path(exdir, name))
-  }
-  return(data)
-}
+
 
 principal_component_pathway_analysis = function(mass_matrix,
                                                 width,
@@ -248,21 +235,21 @@ principal_component_pathway_analysis = function(mass_matrix,
   }
 
   #
-  source("./R/fct_db_adduct_filter.R")
-  source("./R/fct_formula_filter.R")
-  source("./R/fct_proc_db.R")
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_db_adduct_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_formula_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_proc_db.R"))
   #### Load the Cleaned and summarized DB ####
-  Chebi_db     = readRDS("./inst/db_files/Chebi_1_names.rds")
-  HMDB_db      = readRDS("./inst/db_files/HMDB_1_names.rds")
+  Chebi_db     = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/db_files/Chebi_1_names.rds"))
+  HMDB_db      = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/db_files/HMDB_1_names.rds"))
 
   # Set the db that you want to search against
   db = rbind(HMDB_db, Chebi_db)
   # set which adducts you want to search for
-  adduct_file = readRDS("./inst/adduct_file.rds")
+  adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/adduct_file.rds"))
   if (ion_mode == "positive") {
-    test_add = adduct_file$adduct_name[which(adduct_file$charge >= 0)]
+    test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge >= 0)])
   } else if (ion_mode == "negative") {
-    test_add = adduct_file$adduct_name[which(adduct_file$charge <= 0)]
+    test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge <= 0)])
   } else{
     stop("Please enter correct polarity")
   }
@@ -279,14 +266,17 @@ principal_component_pathway_analysis = function(mass_matrix,
   # If ppm_error not specified, use function to estimate
 
   if (is.null(ppm_error)) {
-    source("./network_based_pathway_ananlysis/estimate_mz_resolution_error.R")
-    ppm_error_df = estimate_mz_resolution_error(
-      mass_matrix = resampled_mat,
-      ion_mode = ion_mode,
-      matrix_molecule = matrix_molecule,
-      mass_resolution = tof_resolution,
-      plot = F
-    )
+    if(is.null(matrix_molecule)){
+      stop("Please enter correct matrix molecule, either in molecular mass (unit au) or entries")
+    }else{
+      ppm_error_df = estimate_mz_resolution_error(
+        mass_matrix = resampled_mat,
+        ion_mode = ion_mode,
+        matrix_molecule = matrix_molecule,
+        mass_resolution = tof_resolution,
+        plot = F
+      ) 
+    }
     if (nrow(ppm_error_df) == 0) {
       stop(
         "No close metabolites find around given matrix mass, please specify a ppm_error, e.g 20"
@@ -300,7 +290,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   ppm_error = 1e6 / tof_resolution / sqrt(2 * log(2))
   db_3 = proc_db(input_mz, db_2, ppm_error) %>% mutate(entry = str_split(Isomers,
                                                                          pattern = "; "))
-
+  print("Query necessary data and establish pathway database")
   input_id = lapply(db_3$entry, function(x) {
     x = unlist(x)
     index_hmdb = which(grepl(x, pattern = "HMDB"))
@@ -309,20 +299,26 @@ principal_component_pathway_analysis = function(mass_matrix,
     x[index_chebi] = tolower(x[index_chebi])
     return(x)
   })
-  chem_props = readRDS("./network_based_pathway_ananlysis/chem_props.rds")
+  chem_props =readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/chem_props.rds"))
   db_3 = db_3 %>% mutate(inputid = input_id)
   rampid = c()
   chem_source_id = unique(chem_props$chem_source_id)
+  pb = txtProgressBar(
+    min = 0,
+    max = retained,
+    initial = 0,
+    style = 3
+  )
   for (i in 1:nrow(db_3)) {
     rampid[i] = (chem_props$ramp_id[which(chem_source_id %in% db_3$inputid[i])])[1]
+    setTxtProgressBar(pb, i)
   }
+  close(pb)
   db_3 = cbind(db_3, rampid)
   print("Query finished")
   ####################################################################################################
-  get_analytes_db = function(input_id) {
-    load_compressed_data("analytehaspathway.rda")
-    load_compressed_data("pathway.rda")
-    load_compressed_data("source.rda")
+  get_analytes_db = function(input_id,analytehaspathway,
+                             chem_props,pathway) {
 
     rampid = chem_props$ramp_id[which(chem_props$chem_source_id %in% unique(input_id))]
     #
@@ -342,7 +338,11 @@ principal_component_pathway_analysis = function(mass_matrix,
   }
   # get rank pathway database
   print("Getting reference pathways")
-  pathway_db = get_analytes_db(input_id)
+  analytehaspathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/analytehaspathway.rds"))
+  pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/pathway.rds"))
+  source = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/source.rds"))
+  pathway_db = get_analytes_db(input_id,analytehaspathway,
+                               chem_props)
   pathway_db = pathway_db[which(!duplicated(names(pathway_db)))]
   # get names for the ranks
   name_rank = lapply(input_mz$mz, function(x) {
