@@ -80,7 +80,6 @@ svd_analysis = function(mass_matrix,
     }else{
       stop("Please enter correct number of cores 'num_cores'")
     }
-    source("./R/gaussian_blur.R")
     clust <- makeCluster(n.cores)
     clusterExport(clust, varlist = c("mass_matrix",
                                      "gaussian_blur",
