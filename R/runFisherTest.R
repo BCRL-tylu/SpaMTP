@@ -10,20 +10,6 @@
 #' @param alternative The hypothesis of the fisher exact test
 
 #' @return a dataframe with the relevant pathway information
-load_compressed_data <- function(name) {
-  exdir = "./inst/tmp"
-  if(length(list.files(path =  exdir,
-                       pattern = name)) == 0){
-    unzip("./data/query_data.zip", exdir = exdir)
-  }
-  if (grepl(name,
-            pattern = ".rds")) {
-    data <- readRDS(file.path(exdir, name))
-  } else{
-    load(file.path(exdir, name))
-  }
-  return(data)
-}
 runFisherTest = function (analytes, analyte_type = "metabolites",
            alternative = "greater", min_path_size = 5, max_path_size = 150)
 {
@@ -34,12 +20,12 @@ runFisherTest = function (analytes, analyte_type = "metabolites",
   # Get the RaMP ids for metabolites/genes
 
   print("Loading files ......")
-  load_compressed_data("analytehaspathway.rda")
-  load_compressed_data("pathway.rda")
-  load_compressed_data("source.rda")
-  load_compressed_data("chem_props.rds")
-  load_compressed_data("analyte.rda")
-  load_compressed_data("pathway.rda")
+  analytehaspathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/analytehaspathway.rds"))
+  pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/pathway.rds"))
+  source = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/source.rds"))
+  chem_props =readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/chem_props.rds"))
+  analyte =readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/analyte.rds"))
+  pathway =readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/pathway.rds"))
 
   print("Loading files finished!")
 

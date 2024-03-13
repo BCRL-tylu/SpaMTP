@@ -51,7 +51,6 @@ svd_analysis = function(mass_matrix,
     require(utils)
     pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
     blur_matrix = matrix(nrow = width*height)
-    source("./R/gaussian_blur.R")
     for(i in 1:ncol(mass_matrix)){
       temp_mz_matrix = matrix(mass_matrix[,i],
                               ncol = width,
