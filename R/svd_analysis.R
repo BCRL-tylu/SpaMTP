@@ -38,7 +38,7 @@ svd_analysis = function(mass_matrix,
                                   use_paralle = F,
                                   num_cores =NULL){
   require(Matrix)
-  mass_matrix = Matrix(mass_matrix,
+  mass_matrix = Matrix(as.matrix(mass_matrix),
                        sparse = T)
 
 
