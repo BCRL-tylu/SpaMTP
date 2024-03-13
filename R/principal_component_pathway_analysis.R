@@ -404,5 +404,5 @@ principal_component_pathway_analysis = function(mass_matrix,
   return(list(pca = pca,
                      pathway_enrichment_pc = pca_sea_list,
                      new.width = as.integer(width/as.numeric(resampling_factor)),
-                     new.height = as.integer(height/as.numeric(resampling_factor)))
+                     new.height = as.integer(height/as.numeric(resampling_factor))))
 }
