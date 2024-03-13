@@ -305,7 +305,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   chem_source_id = unique(chem_props$chem_source_id)
   pb = txtProgressBar(
     min = 0,
-    max = retained,
+    max = nrow(db_3),
     initial = 0,
     style = 3
   )
@@ -342,7 +342,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/pathway.rds"))
   source = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/source.rds"))
   pathway_db = get_analytes_db(input_id,analytehaspathway,
-                               chem_props)
+                               chem_props,pathway)
   pathway_db = pathway_db[which(!duplicated(names(pathway_db)))]
   # get names for the ranks
   name_rank = lapply(input_mz$mz, function(x) {
@@ -350,7 +350,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   })
 
   #Set progress bar
-  pb = txtProgressBar(
+  pb_new = txtProgressBar(
     min = 0,
     max = retained,
     initial = 0,
@@ -386,12 +386,12 @@ principal_component_pathway_analysis = function(mass_matrix,
           return(metabolites_name)
         }))
     })
-    setTxtProgressBar(pb, i)
+    setTxtProgressBar(pb_new, i)
     # Make sure sign of loading is positive to make it positively correlate with the PC
     pca_sea_list = list.append(pca_sea_list,
                                gsea_result)
   }
-  close(pb)
+  close(pb_new)
   names(pca_sea_list) = paste0("PC", 1:retained)
 
   par(mfrow = c(2, 2))
@@ -401,8 +401,8 @@ principal_component_pathway_analysis = function(mass_matrix,
     biplot(pca, choices = c(2, 3), cex = c(0.05, 0.8))
     biplot(pca, choices = c(1, 3), cex = c(0.05, 0.8))
   }
-  return(list.append(pca = pca,
+  return(list(pca = pca,
                      pathway_enrichment_pc = pca_sea_list,
                      new.width = as.integer(width/as.numeric(resampling_factor)),
-                     new.height = as.integer(height/as.numeric(resampling_factor))))
+                     new.height = as.integer(height/as.numeric(resampling_factor)))
 }
