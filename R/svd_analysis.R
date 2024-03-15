@@ -26,7 +26,7 @@ library(fields)
 svd_analysis = function(mass_matrix,
                                   width,
                                   height,
-                                  variance_explained = 0.99,
+                                  variance_explained = 0.9,
                                   plot = F,
                                   number_to_plot = 8,
                                   randomised_svd = F,
@@ -40,6 +40,7 @@ svd_analysis = function(mass_matrix,
   require(Matrix)
   mass_matrix = Matrix(as.matrix(mass_matrix),
                        sparse = T)
+  gc()
 
 
   ##########################################################
@@ -65,6 +66,7 @@ svd_analysis = function(mass_matrix,
     blur_matrix = blur_matrix[,-1]
     colnames(blur_matrix) =colnames(mass_matrix)
     close(pb)
+    gc()
     print("Guassian Blur finished")
   }
 
@@ -88,7 +90,7 @@ svd_analysis = function(mass_matrix,
                                      "kernel_size",
                                      "sigma"), envir = environment())
     print("Running gaussian blur (Takes roughly 2 min on 16 cores processing 500 frames of 1000pix*1000pix matrices)")
-    blur_list <- parLapply(clust, split(t(mass_matrix),seq_len(nrow(t(mass_matrix)))), function(x){
+    suppressWarnings({blur_list <- parLapply(clust, split(t(as.matrix(mass_matrix)),seq_len(nrow(t(as.matrix(mass_matrix))))), function(x){
       temp_mz_matrix = matrix(x,
                               ncol = width,
                               nrow = height, byrow = T)
@@ -96,8 +98,9 @@ svd_analysis = function(mass_matrix,
                                   sigma = sigma,
                                   kernel_size = kernel_size,
                                   return_vector = T)
+      gc()
       return(blured_temp)
-    })
+    })})
     stopCluster(clust)
     gc()
     blur_matrix =do.call(cbind,blur_list)
@@ -160,6 +163,7 @@ svd_analysis = function(mass_matrix,
                                                    new.height))
       resampled_mat = cbind(resampled_mat,as.vector(resampled_temp))
       setTxtProgressBar(pb,i)
+      gc()
     }
     close(pb)
     resampled_mat = resampled_mat[,-1]
@@ -216,7 +220,7 @@ svd_analysis = function(mass_matrix,
     print("SVD done")
   }else{
     require(rsvd)
-    print("Running random matrix decomposition")
+    print("Running random matrix single value decomposition")
     if(is.null(k)){
       k = ncol(resampled_mat)
     }
@@ -227,6 +231,9 @@ svd_analysis = function(mass_matrix,
   cumsum = cumsum(svd$d^2/sum(svd$d^2))
   # The retained part of the data
   retain = length(which(cumsum<= variance_explained))
+  if(retain <= 0){
+    stop("None of the singular values explained variance less than input, please consider increase variance_explained variable")
+  }
   # column vectors V stores the composition of variance explained by each components
   retained_component = svd$v[,1:retain]
   # Get the distribution matrix of the characteristic m/z values
@@ -247,6 +254,7 @@ svd_analysis = function(mass_matrix,
       value_matrix = value_matrix + linear_factor*percentage_explain
     }
   }
+  gc()
   if(plot == T){
     plot.new()
     print("Plotting figures")
@@ -265,14 +273,16 @@ svd_analysis = function(mass_matrix,
     par(mar = c(2, 2, 1, 1))
     for(i in 1:number_to_plot){
       plot_matrix = matrix(resampled_mat[,order(value_matrix,decreasing = T)[i]],
-                           nrow = new.height, ncol = new.width, byrow = T)
+                           nrow = new.height, ncol = new.width, byrow = F)
       image = fields::image.plot(plot_matrix, useRaster = T,
                                  main = paste0("m/z:",colnames(resampled_mat[,order(value_matrix,decreasing = T)])[i]),axes=FALSE, xlab = "", ylab = "")
       image
     }
   }
-
-  returned_item = list(characteristic_mz_matices = resampled_mat[,order(value_matrix,decreasing = T)],
+  gc()
+  print("Finished")
+  returned_item = list(ordered_characteristic_mz_matices = resampled_mat[,order(value_matrix,decreasing = T)],
+                       num_Singular_value_retained = retain,
                        svd = svd,
                        randomised_svd = randomised_svd,
                        k = k,
@@ -282,5 +292,6 @@ svd_analysis = function(mass_matrix,
                        new_height = new.height,
                        sigma = sigma,
                        use_gaussian_blur = use_gaussian_blur)
+  gc()
   return(returned_item)
 }
