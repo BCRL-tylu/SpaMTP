@@ -28,29 +28,92 @@ gaussian_blur <- function(matrix, sigma = 1,
   
   # Apply convolution with the kernel
   blurred_matrix <- matrix(0, nrow = nrow(matrix), ncol = ncol(matrix))
-  for (i in 1:(nrow(matrix))) {
+  
+ ########################################## top left ##########################################
+  for (i in 1:size) {
     # Define the boundaries for convolution
     row_index = (i-size):(i+size)
-    if(i<=size){
       row_index[which(row_index<=0)]= abs(row_index[which(row_index<=0)]-1-i)
-    }
-    if(i>(nrow(matrix)-size)){
-      row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
-    }
-    for (j in 1:(ncol(matrix))) {
+    for (j in 1:size)) {
       col_index = (j-size):(j+size)
-      if(j<=size){
-        col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
-      }
-      if(j>(ncol(matrix)-size)){
-        col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
-      }
+      col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
       # Get the unprocessed kernel
-      matrix_kernel = matrix[row_index,
-                             col_index]
+      # Convolution operation within boundaries
+      blurred_matrix[i, j] <- sum(matrix[row_index,
+                                         col_index]* kernel)
+    }
+  }
+  
+  ########################################## top right ##########################################
+  for (i in (nrow(matrix)-size+1):(nrow(matrix))) {
+    # Define the boundaries for convolution
+    row_index = (i-size):(i+size)
+    row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
+    for (j in 1:size)) {
+      col_index = (j-size):(j+size)
+      col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
+      # Get the unprocessed kernel
+      # Convolution operation within boundaries
+      blurred_matrix[i, j] <- sum(matrix[row_index,
+                                         col_index]* kernel)
+    }
+  }
+  
+  
+  ########################################## bottom right ##########################################
+  for (i in (nrow(matrix)-size+1):(nrow(matrix))) {
+    # Define the boundaries for convolution
+    row_index = (i-size):(i+size)
+    row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
+    for (j in (ncol(matrix)-size+):ncol(matrix))) {
+      col_index = (j-size):(j+size)
+      col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
+      # Get the unprocessed kernel
+      # Convolution operation within boundaries
+      blurred_matrix[i, j] <- sum(matrix[row_index,
+                                         col_index]* kernel)
+    }
+  }
+  
+  ########################################## bottom left ##########################################
+  for (i in 1:size) {
+    # Define the boundaries for convolution
+    row_index = (i-size):(i+size)
+    row_index[which(row_index<=0)]= abs(row_index[which(row_index<=0)]-1-i)
+    for (j in (ncol(matrix)-size+):ncol(matrix))) {
+      col_index = (j-size):(j+size)
+      col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
+      # Get the unprocessed kernel
+      # Convolution operation within boundaries
+      blurred_matrix[i, j] <- sum(matrix[row_index,
+                                         col_index]* kernel)
+    }
+  }
+  
+  
+  
+  for (i in (size+1):(nrow(matrix)-size)) {
+    # Define the boundaries for convolution
+    row_index = (i-size):(i+size)
+    # if(i<=size){
+    #   row_index[which(row_index<=0)]= abs(row_index[which(row_index<=0)]-1-i)
+    # }
+    # if(i>(nrow(matrix)-size)){
+    #   row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
+    # }
+    for (j in (size+1):(ncol(matrix)-size)) {
+      col_index = (j-size):(j+size)
+      # if(j<=size){
+      #   col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
+      # }
+      # if(j>(ncol(matrix)-size)){
+      #   col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
+      # }
+      # Get the unprocessed kernel
       # Convolution operation within boundaries
       
-      blurred_matrix[i, j] <- sum(matrix_kernel* kernel)
+      blurred_matrix[i, j] <- sum(matrix[row_index,
+                                         col_index]* kernel)
     }
   }
   if(return_vector == F){
