@@ -1,0 +1,1143 @@
+
+
+
+```{r loadingdata}
+# This is not seurat object by merely a matrix like object
+mass_matrix = readRDS("~/mass_matrix.rds")
+suppressWarnings(devtools::load_all("~/git/SpaMTP"))
+```
+
+```{r runFisherTest Arguments&helper functions}
+
+################ helper function convert_to_rows
+# Convert_to_rows is a function which takes a single column of a data frame and convert it into a row vector with respect to a specific pattern
+convert_to_rows <- function(row,
+                            pattern) {
+  identifiers = data.frame()
+  for (i in which(grepl(row,
+                        pattern = pattern))) {
+    temp = unlist(strsplit(unlist(row[i]), pattern))
+    identifiers <- rbind(identifiers,
+                         temp)
+  }
+  identifiers = t(identifiers)
+  colnames(identifiers) = colnames(row)[which(grepl(row,
+                                      pattern = pattern)==T)]
+  return(cbind(row[which(grepl(row,
+                             pattern = pattern)==F)][rep(1, times = nrow(identifiers)),],
+             identifiers))
+}
+
+
+################## Aruguments for runFishertest
+#Arguments
+analytes = sub(" ","",expand_db3$Isomers)
+analyte_type = "metabolites"
+alternative = "greater"
+min_path_size = 5
+max_path_size = 150
+```
+
+```{r runFishertest content}
+ # function content
+  require(dplyr)
+  now <- proc.time()
+  print("Fisher Testing ......")
+  pathwayRampId <- rampId <- c()
+  # Get the RaMP ids for metabolites/genes
+  
+  print("Loading files ......")
+  analytehaspathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/analytehaspathway.rds"))
+  pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/pathway.rds"))
+  source = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/source.rds"))
+  chem_props = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/chem_props.rds"))
+  analyte = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/analyte.rds"))
+  pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")), "/data/pathway.rds"))
+  
+  print("Loading files finished!")
+  
+  if (analyte_type == "metabolites") {
+    source = source[which(grepl(source$rampId, pattern = "RAMP_C") == T), ]
+    analytehaspathway = analytehaspathway[which(grepl(analytehaspathway$rampId, pattern = "RAMP_C") == T), ]
+    analyte = analyte[which(grepl(analyte$rampId, pattern = "RAMP_C") == T), ]
+  } else if (analyte_type == "genes") {
+    source = source[which(grepl(source$rampId, pattern = "RAMP_G") == T), ]
+    analytehaspathway = analytehaspathway[which(grepl(analytehaspathway$rampId, pattern = "RAMP_G") == T), ]
+    analyte = analyte[which(grepl(analyte$rampId, pattern = "RAMP_G") == T), ]
+  } else if(analyte_type == "mz"){
+    adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/adduct_file.rds"))
+load(paste0(dirname(system.file(package = "SpaMTP")),"/data/Chebi_db.rda"))
+load(paste0(dirname(system.file(package = "SpaMTP")),"/data/Lipidmaps_db.rda"))
+load(paste0(dirname(system.file(package = "SpaMTP")),"/data/HMDB_db.rda"))
+# Since this file was tested in positive ion mode
+db = rbind(Chebi_db,
+           Lipidmaps_db,
+           HMDB_db)
+rm(Chebi_db)
+rm(Lipidmaps_db)
+rm(HMDB_db)
+gc()
+test_add_pos <- adduct_file$adduct_name[which(adduct_file$charge>=0)]
+# Using Chris' pipeline for annotation
+# 1) Filter DB by adduct.
+db_1 <- db_adduct_filter(db, test_add_pos, polarity = "pos")
+
+# 2) only select natural elements
+db_2 <- formula_filter(db_1)
+
+# 3) search db against mz df return results
+input_mz = data.frame(cbind(row_id = 1:length(colnames(mass_matrix)),
+                            mz = as.numeric(colnames(mass_matrix))))
+ppm_error <- 10
+db_3 <- proc_db(data.frame(input_mz), db_2, ppm_error)
+# Expand the isomer entries
+print("Expanding database to extract all potential metabolites")
+expand_db3 = data.frame()
+    pb = txtProgressBar(min = 0, max = nrow(db_3), initial = 0, style = 3)
+suppressWarnings({for(i in 1:nrow(db_3)){
+  if(any(grepl(db_3[i,],pattern = ";"))){
+    expand_db3 = rbind(expand_db3,
+                       convert_to_rows(db_3[i,],
+                                       pattern = ";"))
+  }else{
+    expand_db3 = rbind(expand_db3,
+                       db_3[i,])
+  }
+        setTxtProgressBar(pb,i)
+}
+})
+analytes = sub(" ","",expand_db3$Isomers)
+    source = source[which(grepl(source$rampId, pattern = "RAMP_C") == T), ]
+    analytehaspathway = analytehaspathway[which(grepl(analytehaspathway$rampId, pattern = "RAMP_C") == T), ]
+    analyte = analyte[which(grepl(analyte$rampId, pattern = "RAMP_C") == T), ]
+  }else{
+    stop(
+      "analyte_type was not specified correctly.  Please specify one of the following options: metabolites, genes"
+    )
+  }
+  
+  # Pathway enrichment
+  if (analyte_type == "metabolites"|analyte_type == "mz") {
+    ############ Metabolites pathway analysis ##############
+    print("Begin metabolic pathway analysis ......")
+    analytes_rampids = unique(source$rampId[which(tolower(source$sourceId) %in% tolower(analytes))])
+    # (1) Get candidate pathways
+    # Get all analytes and number of analytes within a specific pathway
+    
+    pathway_rampids = analytehaspathway[which(analytehaspathway$rampId %in% analytes_rampids), ] %>% rowwise() %>%
+      dplyr::mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>%
+      dplyr::count(pathwayRampId,
+                   ananlytes_id_list,
+                   sort = T,
+                   name = "analytes_in_pathways")
+    
+    pathway_rampids = pathway_rampids %>%  mutate(screened_analytes = list(ananlytes_id_list[which(ananlytes_id_list %in% analytes_rampids)]))
+    # (2) Get total analytes in each pathway
+    total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId), ] %>%
+      dplyr::count(pathwayRampId,
+                   name = "total_in_pathways")
+    # (3) Creare a df that store the enrichment square for each pathways
+    enrichment_df = merge(total_in_pathways,
+                          pathway_rampids,
+                          by = "pathwayRampId") %>%
+      mutate(total_analytes = length(unique(analytes_rampids)))
+    # (4) Conduct pathway enrichment
+    total_in_selected_pathways = length(unique(analytehaspathway$rampId))
+    print("Calculating p value......")
+    enrichment_df = enrichment_df %>% rowwise() %>% mutate(p_val = fisher.test(matrix(
+      c(
+        analytes_in_pathways,
+        # Detected metabolites in pathway
+        total_analytes -
+          analytes_in_pathways,
+        # Detected metabolites not in pathway
+        total_in_pathways -
+          analytes_in_pathways,
+        # Pathway elements not detected
+        total_in_selected_pathways -
+          total_in_pathways - total_analytes + analytes_in_pathways
+      ),
+      2,
+      2
+    ),
+    alternative = alternative)$p.value)
+    enrichment_df = cbind(enrichment_df,
+                          fdr = p.adjust(enrichment_df$p_val, method = "fdr")) %>% mutate(background_analytes_number = total_in_selected_pathways)
+    print("P value obtained")
+    # (5) Append pathway information to the original df
+    enrichment_df_with_info = merge(enrichment_df,
+                                    pathway[which(pathway$pathwayRampId %in% enrichment_df$pathwayRampId), ],
+                                    by = "pathwayRampId") %>% filter(!duplicated(pathwayName))
+    rm(enrichment_df)
+    gc()
+    # (6) Append metabolites information to the original df
+    # Paste back the original Ids
+    print("Querying metabolites information ......")
+    metabolites_information  = do.call(rbind,
+                                       lapply(enrichment_df_with_info$ananlytes_id_list, function(x) {
+                                         all_chem_props_in_path = chem_props[which(chem_props$ramp_id %in% x), ]
+                                         temp_list_id = all_chem_props_in_path$chem_source_id
+                                         temp_list_name = all_chem_props_in_path$common_name
+                                         return(cbind(paste(unique(temp_list_id[which(tolower(temp_list_id) %in% tolower(analytes))]),
+                                                      collapse = ";"),
+                                                      paste(unique(temp_list_name[which(tolower(temp_list_id) %in% tolower(analytes))]),
+                                                      collapse = ";")))
+                                       }))
+   colnames(metabolites_information) = c("Metabolites' ID",
+                                      "Metbaolites' name")
+    # (7) Reduce the dataframe with respected to the User input pathway size
+    enrichment_df_with_both_info = cbind(enrichment_df_with_info,
+                                         metabolites_information) %>% filter(total_in_pathways <= max_path_size &
+                                                                               total_in_pathways >= min_path_size)
+    print("Done")
+    rm(chem_props)
+    rm(enrichment_df_with_info)
+    rm(metabolites_information)
+    gc()
+    #return(enrichment_df_with_both_info %>% select(-c(
+    #  pathwayRampId,
+    #  ananlytes_id_list,
+    #  screened_analytes
+    #)))
+    return = enrichment_df_with_both_info %>% select(-c(
+      pathwayRampId,
+      ananlytes_id_list,
+      screened_analytes
+    ))
+  } else if (analyte_type == "genes") {
+    ########Gene pathway analysis########
+    print("Begin gene pathway analysis ......")
+    analytes_rampids = unique(source$rampId[which(tolower(source$sourceId) %in% tolower(analytes))])
+    # (1) Get candidate pathways
+    # Get all analytes and number of analytes within a specific pathway
+    pathway_rampids = analytehaspathway[which(analytehaspathway$rampId %in% analytes_rampids), ] %>% rowwise() %>%
+      mutate(ananlytes_id_list = list(analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == pathwayRampId)])) %>%
+      dplyr::count(pathwayRampId,
+                   ananlytes_id_list,
+                   sort = T,
+                   name = "analytes_in_pathways")
+    pathway_rampids = pathway_rampids %>%  mutate(screened_analytes = list(ananlytes_id_list[which(ananlytes_id_list %in% analytes_rampids)]))
+    # (2) Get total analytes in each pathway
+    total_in_pathways = analytehaspathway[which(analytehaspathway$pathwayRampId %in%  pathway_rampids$pathwayRampId), ] %>%
+      dplyr::count(pathwayRampId,
+                   name = "total_in_pathways")
+    # (3) Creare a df that store the enrichment square for each pathways
+    enrichment_df = merge(total_in_pathways,
+                          pathway_rampids,
+                          by = "pathwayRampId") %>%
+      mutate(total_analytes = length(unique(analytes_rampids)))
+    # (4) Conduct pathway enrichment
+    total_in_selected_pathways = length(unique(analytehaspathway$rampId))
+    print("Calculating p value......")
+    enrichment_df = enrichment_df %>% rowwise() %>% mutate(p_val = fisher.test(matrix(
+      c(
+        analytes_in_pathways,
+        # Detected metabolites in pathway
+        total_analytes -
+          analytes_in_pathways,
+        # Detected metabolites not in pathway
+        total_in_pathways -
+          analytes_in_pathways,
+        # Pathway elements not detected
+        total_in_selected_pathways -
+          total_in_pathways - total_analytes + analytes_in_pathways
+      ),
+      2,
+      2
+    ),
+    alternative = alternative)$p.value)
+    enrichment_df = cbind(enrichment_df,
+                          fdr = p.adjust(enrichment_df$p_val, method = "fdr")) %>% mutate(background_analytes_number = total_in_selected_pathways)
+    print("P value obtained")
+    # (5) Append pathway information to the original df
+    enrichment_df_with_info = merge(enrichment_df,
+                                    pathway[which(pathway$pathwayRampId %in% enrichment_df$pathwayRampId), ],
+                                    by = "pathwayRampId") %>% filter(!duplicated(pathwayName))
+    rm(enrichment_df)
+    # (6) Append metabolites information to the original df
+     print("gene metabolites IDs ......")
+    genes_information  =  do.call(rbind,
+                                  lapply(enrichment_df_with_info$ananlytes_id_list, function(x) {
+                                    temp_list = unique(source[which(source$rampId %in% x), ]$sourceId)
+                                    gene_symbol = sub("gene_symbol:", "", temp_list[which(grepl(templist,
+                                                                                                pattern = "gene_symbol"))])
+                                    return(paste(temp_list[which(tolower(temp_list) %in% tolower(analytes))],
+                                                 collapse = ";"))
+                                  }))
+    # (7) Reduce the dataframe with respected to the User input pathway size
+    enrichment_df_with_both_info = cbind(enrichment_df_with_info,
+                                         genes_information) %>% filter(total_in_pathways <= max_path_size &
+                                                                         total_in_pathways >= min_path_size)
+    print("Done")
+    rm(enrichment_df_with_info)
+    rm(genes_information)
+    gc()
+    #return(enrichment_df_with_both_info %>% select(-c(
+    #  pathwayRampId,
+    #  ananlytes_id_list,
+    #  screened_analytes
+    #)))
+      return = enrichment_df_with_both_info %>% select(-c(
+      pathwayRampId,
+      ananlytes_id_list,
+      screened_analytes
+    ))
+  }
+```
+
+
+
+```{r svd_analysis Arguments}
+mass_matrix = readRDS("~/mass_matrix.rds")
+mass_matrix = mass_matrix[,1:50] # redcued to 100 dimensions to save testing time
+width = 912
+height = 853
+variance_explained = 0.9
+plot = T
+number_to_plot = 8
+randomised_svd = F
+k = NULL
+kernel_size = 3
+resampling_factor = 2
+sigma = 1
+use_gaussian_blur = ifelse(is.null(resampling_factor), F, T)
+use_paralle = F #Memory consuming if T
+num_cores =NULL
+```
+
+```{r svd_analysis helper_functions}
+# rescale is a function to rescale the matrix to a new dimension
+rescale <- function(x, newrange=range(x)){
+  xrange <- range(x)
+  mfac <- (newrange[2]-newrange[1])/(xrange[2]-xrange[1])
+  newrange[1]+(x-xrange[1])*mfac
+}
+
+# ResizeMat is a function that uses interpolation to merge pixel information
+ResizeMat <- function(mat, ndim=dim(mat)){
+  if(!require(fields)) stop("`fields` required.")
+  
+  # input object
+  odim <- dim(mat)
+  obj <- list(x= 1:odim[1], y=1:odim[2], z= mat)
+  
+  # output object
+  ans <- matrix(NA, nrow=ndim[1], ncol=ndim[2])
+  ndim <- dim(ans)
+  
+  # rescaling
+  ncord <- as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
+  loc <- ncord
+  loc[,1] = rescale(ncord[,1], c(1,odim[1]))
+  loc[,2] = rescale(ncord[,2], c(1,odim[2]))
+  
+  # interpolation
+  ans[ncord] <- interp.surface(obj, loc)
+  ans
+}
+```
+
+```{r svd_analysis content}
+ require(Matrix)
+  mass_matrix = Matrix(as.matrix(mass_matrix),
+                       sparse = T)
+  gc()
+  
+  
+  
+  ###################Gaussian blur##########################
+  
+  
+  if(use_gaussian_blur  == T & use_paralle == F){
+    print("Running gaussian blur")
+    require(utils)
+    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
+    blur_matrix = matrix(nrow = width*height)
+    for(i in 1:ncol(mass_matrix)){
+      temp_mz_matrix = t(matrix(mass_matrix[,i],
+                                ncol = width,
+                                nrow = height, byrow = F))
+      blured_temp = gaussian_blur(temp_mz_matrix,
+                                  sigma = sigma,
+                                  kernel_size = kernel_size,
+                                  return_vector = T)
+      blur_matrix = cbind(blur_matrix,blured_temp)
+      setTxtProgressBar(pb,i)
+    }
+    blur_matrix = blur_matrix[,-1]
+    colnames(blur_matrix) =colnames(mass_matrix)
+    close(pb)
+    gc()
+    print("Guassian Blur finished")
+  }
+  
+  if(use_gaussian_blur == T & use_paralle == T){
+    print("Running gaussian blur on parallel cores")
+    require(parallel)
+    require(parallelly)
+    print("Making cluster on your aviliable cores")
+    if(is.null(num_cores)){
+      n.cores = parallelly::availableCores()/2
+    }else if(is.numeric(num_cores) == T){
+      n.cores = as.integer(num_cores)
+    }else{
+      stop("Please enter correct number of cores 'num_cores'")
+    }
+    clust <- makeCluster(n.cores)
+    clusterExport(clust, varlist = c("mass_matrix",
+                                     "gaussian_blur",
+                                     "width",
+                                     "height",
+                                     "kernel_size",
+                                     "sigma"), envir = environment())
+    print("Running gaussian blur (Takes roughly 2 min on 16 cores processing 500 frames of 1000pix*1000pix matrices)")
+    suppressWarnings({blur_list <- parLapply(clust, split(t(as.matrix(mass_matrix)),seq_len(nrow(t(as.matrix(mass_matrix))))), function(x){
+      temp_mz_matrix = t(matrix(mass_matrix[,i],
+                                ncol = width,
+                                nrow = height, byrow = F))
+      blured_temp = gaussian_blur(temp_mz_matrix,
+                                  sigma = sigma,
+                                  kernel_size = kernel_size,
+                                  return_vector = T)
+      gc()
+      return(blured_temp)
+    })})
+    stopCluster(clust)
+    gc()
+    blur_matrix =do.call(cbind,blur_list)
+    colnames(blur_matrix) =colnames(mass_matrix)
+    print("Guassian Blur finished")
+  }
+  ##########################################################
+  #####################Resampling###########################
+  ##########################################################
+  
+  if(use_gaussian_blur == T){
+    blur_matrix = Matrix::Matrix(blur_matrix,
+                                 sparse = T)
+    rm(mass_matrix)
+    gc()
+  }else{
+    blur_matrix = mass_matrix
+    rm(mass_matrix)
+    gc
+  }
+  
+  if(!is.null(resampling_factor)){
+    print("Running matrix resampling")
+    pb = txtProgressBar(min = 0, max = ncol(blur_matrix), initial = 0, style = 3)
+    if(!is.numeric(resampling_factor)){
+      stop("Please enter correct resampling_factor")
+    }
+    new.width = as.integer(width/resampling_factor)
+    new.height = as.integer(height/resampling_factor)
+    
+    resampled_mat = matrix(nrow =  new.height*new.width)
+    for(i in 1:ncol(blur_matrix)){
+      temp_mz_matrix = matrix(blur_matrix[,i],
+                              ncol = width,
+                              nrow = height, byrow = T)
+      resampled_temp = ResizeMat(temp_mz_matrix, c(new.width,
+                                                   new.height))
+      resampled_mat = cbind(resampled_mat,as.vector(resampled_temp))
+      setTxtProgressBar(pb,i)
+      gc()
+    }
+    close(pb)
+    resampled_mat = resampled_mat[,-1]
+    colnames(resampled_mat) = colnames(blur_matrix)
+    print("Resampling finished!")
+    rm(blur_matrix)
+    gc()
+  }else{
+    resampled_mat = blur_matrix
+    rm(blur_matrix)
+    gc()
+  }
+  
+  # if(!is.null(resampling_factor) & use_paralle == T){
+  #   if(!is.numeric(resampling_factor)){
+  #     stop("Please enter correct resampling_factor")
+  #   }
+  #   new.width = as.integer(width/resampling_factor)
+  #   new.height = as.integer(height/resampling_factor)
+  #   print("Running matrix resampling")
+  #   print("Making cluster on your aviliable cores")
+  #   clust <- makeCluster(n.cores)
+  #   clusterExport(clust, varlist = c("blur_matrix",
+  #                                    "ResizeMat",
+  #                                    "new.width",
+  #                                    "new.height",
+  #                                    "rescale",
+  #                                    "width",
+  #                                    "height"), envir = environment())
+  #   print("Running matrix resampling on multiple cores")
+  #   resampled_list <- parLapply(clust, split(t(blur_matrix),seq_len(nrow(t(blur_matrix)))), function(x){
+  #     temp_mz_matrix = matrix(x,
+  #                             ncol = width,
+  #                             nrow = height, byrow = F)
+  #     resampled_temp = ResizeMat(temp_mz_matrix, c(new.width,
+  #                                                  new.height))
+  #     return(as.vector(resampled_temp))
+  #   })
+  #   stopCluster(clust)
+  #   gc()
+  #   resampled_mat =do.call(cbind,resampled_list)
+  #   colnames(resampled_mat) =colnames(blur_matrix)
+  #   print("Resampling finished!")
+  # }
+  
+  ###################################################
+  #####################SVD###########################
+  ###################################################
+  if(is.null(resampling_factor)){
+    resampled_mat = blur_matrix
+    new.width  = width
+    new.height = height
+    sigma = NULL
+  }
+  
+  if(randomised_svd == F){
+    print("Running exact matrix single value decomposition")
+    svd = svd(resampled_mat)
+    print("SVD done")
+  }else{
+    require(rsvd)
+    print("Running random matrix single value decomposition")
+    if(is.null(k)){
+      k = ncol(resampled_mat)
+    }
+    svd = rsvd(resampled_mat, k)
+    print("SVD done")
+  }
+  print("Searching out most characteristic m/z which contribute most to the variance explanation")
+  cumsum = cumsum(svd$d^2/sum(svd$d^2))
+  # The retained part of the data
+  retain = length(which(cumsum<= variance_explained))
+  if(retain <= 0){
+    stop("None of the singular values explained variance less than input, please consider increase variance_explained variable")
+  }
+  # column vectors V stores the composition of variance explained by each components
+  retained_component = svd$v[,1:retain]
+  # Get the distribution matrix of the characteristic m/z values
+  order_matrix = data.frame()
+  value_matrix = c()
+  print("Evaluating the relative proportion of variance explained by individual m/z values")
+  for(i in 1:retain){
+    if(i ==1L){
+      percentage_explain =  cumsum[i]
+      linear_factor = abs(retained_component[,i])
+      order_matrix = order(linear_factor*percentage_explain, decreasing = T)
+      value_matrix = linear_factor*percentage_explain
+    }else{
+      percentage_explain =  cumsum[i]-cumsum[i-1]
+      linear_factor = abs(retained_component[,i])
+      order_matrix = cbind(order_matrix ,
+                           order(linear_factor * percentage_explain, decreasing = T))
+      value_matrix = value_matrix + linear_factor*percentage_explain
+    }
+  }
+  gc()
+  if(plot == T){
+    plot.new()
+    print("Plotting figures")
+    require(fields)
+    require(spam)
+    if (number_to_plot %% 2 == 0) {
+      result <- 1:number_to_plot
+    } else {
+      result <- c(1:number_to_plot, 0)
+    }
+    # layout.matrix <- matrix(result, ncol = 2)
+    # layout(mat = layout.matrix,
+    #        heights = rep(1.5, times = nrow(layout.matrix)), # Heights of the two rows
+    #        widths = c(2, 2))
+    par(mfrow = c(ceiling(min(number_to_plot,retain)/2), 2))
+    par(mar = c(2, 2, 1, 1))
+    for(i in 1:min(number_to_plot,retain)){
+      plot_matrix = matrix(resampled_mat[,order(value_matrix,decreasing = T)[i]],
+                           nrow = new.height, ncol = new.width, byrow = T)
+      image = fields::image.plot(plot_matrix, useRaster = T,
+                                 main = paste0("m/z:",colnames(resampled_mat[,order(value_matrix,decreasing = T)])[i]),axes=FALSE, xlab = "", ylab = "")
+      image
+    }
+  }
+  gc()
+  print("Finished")
+  returned_item = list(ordered_characteristic_mz_matices = resampled_mat[,order(value_matrix,decreasing = T)],
+                       num_Singular_value_retained = retain,
+                       svd = svd,
+                       randomised_svd = randomised_svd,
+                       k = k,
+                       kernel_size = kernel_size,
+                       resampling_factor = resampling_factor,
+                       new_width = new.width,
+                       new_height = new.height,
+                       sigma = sigma,
+                       use_gaussian_blur = use_gaussian_blur)
+  rm(resampled_mat)
+  gc()
+  #return(returned_item)
+```
+
+```{r principal_component_pathway_analysis arguments}
+mass_matrix = readRDS("~/mass_matrix.rds")
+mass_matrix = mass_matrix[,1:50] # redcued to 100 dimensions to save testing time
+width = 912
+height = 853
+ppm_error = NULL
+ion_mode = "positive"
+tof_resolution = 30000
+input_mz = NULL
+num_retained_component = NULL
+variance_explained_threshold = 0.9
+resampling_factor = 2
+p_val_threshold = 0.05
+biplot = F
+```
+
+```{r principal_component_pathway_analysis helper_functions}
+# Which help to build a pathway db based on detected metabolites
+get_analytes_db = function(input_id,analytehaspathway,
+                           chem_props,pathway) {
+  
+  rampid = chem_props$ramp_id[which(chem_props$chem_source_id %in% unique(input_id))]
+  #
+  pathway_ids = analytehaspathway$pathwayRampId[which(rampid %in% analytehaspathway$rampId)]
+  
+  analytes_db = lapply(pathway_ids, function(x) {
+    content = analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == x)]
+    content = content[which(grepl(content, pattern = "RAMP_C"))]
+    return(content)
+  })
+  analytes_db_name = unlist(lapply(pathway_ids, function(x) {
+    name = pathway$pathwayName[which(pathway$pathwayRampId == x)]
+    return(name)
+  }))
+  names(analytes_db) = analytes_db_name
+  return(analytes_db)
+}
+
+#Helper function list_to_pprcomp
+
+# Which help to build a pathway db based on detected metabolites
+list_to_pprcomp <- function(lst) {
+  # Create an empty object with class pprcomp
+  obj <- structure(list(), class = "prcomp")
+  # Assign components from the list to the object
+  obj$sdev <- lst$sdev
+  obj$rotation <- lst$rotation
+  obj$center <- lst$center
+  obj$scale <- lst$scale
+  obj$x <- lst$x
+  # Add other components as needed
+  
+  # Return the constructed pprcomp object
+  return(obj)
+}
+```
+
+```{r principal_component_pathway_analysis content}
+  # PCA analysis
+  print("Scaling original matrix")
+  mass_matrix = Matrix(as.matrix(mass_matrix), sparse = T)
+  if (!is.null(resampling_factor)) {
+    print("Running matrix resampling")
+    pb = txtProgressBar(
+      min = 0,
+      max = ncol(mass_matrix),
+      initial = 0,
+      style = 3
+    )
+    if (!is.numeric(resampling_factor)) {
+      stop("Please enter correct resampling_factor")
+    }
+    new.width = as.integer(width / resampling_factor)
+    new.height = as.integer(height / resampling_factor)
+
+    resampled_mat = matrix(nrow =  new.height * new.width)
+    for (i in 1:ncol(mass_matrix)) {
+      temp_mz_matrix = matrix(mass_matrix[, i],
+                              ncol = width,
+                              nrow = height,
+                              byrow = F)
+      resampled_temp = ResizeMat(temp_mz_matrix, c(new.width,
+                                                   new.height))
+      resampled_mat = cbind(resampled_mat, as.vector(resampled_temp))
+      setTxtProgressBar(pb, i)
+    }
+    close(pb)
+    resampled_mat = resampled_mat[, -1]
+    colnames(resampled_mat) = colnames(mass_matrix)
+    print("Resampling finished!")
+    gc()
+  }
+  print("Running the principal component analysis (can take some time)")
+  # Runing PCA
+
+  resampled_mat_standardised =   as.matrix(t(t(resampled_mat) - Matrix::colSums(resampled_mat)/nrow(resampled_mat)))
+  print("Computing the covariance")
+  cov_mat <- cov(resampled_mat_standardised)
+  print("Computing the eigenvalue/eigenvectors")
+  eigen_result <- eigen(cov_mat)
+  gc()
+  # Extract eigenvectors and eigenvalues
+  eigenvectors <- eigen_result$vectors
+  eigenvalues <- eigen_result$values
+
+    print("Computing PCA")
+    pc = pbapply::pblapply(1:ncol(resampled_mat_standardised),function(i){
+      temp = resampled_mat_standardised[,1]*eigenvectors[1,i]
+      for(j in 2:ncol(resampled_mat_standardised)){
+        temp =temp+resampled_mat_standardised[,j]*eigenvectors[j,i]
+      }
+      return(temp)
+    })
+    pc = do.call(cbind,pc)
+
+  # make pca object
+    colnames(eigenvectors) = paste0("PC",1:ncol(eigenvectors))
+    rownames(eigenvectors) = colnames(resampled_mat)
+  pca = list(sdev = sqrt(eigenvalues),
+             rotation = eigenvectors,
+             center = Matrix::colSums(resampled_mat)/nrow(resampled_mat),
+             scale = FALSE,
+             x = pc)
+  pca = list_to_pprcomp(pca)
+  print("PCA finished")
+
+  gc()
+  rm(mass_matrix)
+  eigenvalues = pca$sdev ^ 2
+  # Step 5: Compute Principal Components
+  # Choose number of principal components, k
+  # if not input, use scree test to help find retained components
+  
+  if (is.null(num_retained_component)) {
+    if (!is.null(variance_explained_threshold)) {
+      tryCatch({
+        cumulative_variance = cumsum(eigenvalues) / sum(eigenvalues)
+        par(mfrow = c(1, 1))
+        par(mar = c(2, 2, 1, 1))
+        # Plot cumulative proportion of variance explained
+        plot(
+          cumulative_variance,
+          type = 'b',
+          main = "Cumulative Variance Explained",
+          xlab = "Number of Principal Components",
+          ylab = "Cumulative Proportion of Variance Explained"
+        )
+
+        # Add a horizontal line at the desired threshold
+        threshold = variance_explained_threshold  # Example threshold
+        abline(h = threshold,
+               col = "red",
+               lty = 2)
+
+        # Find the number of principal components to retain based on the threshold
+        retained =  which(cumulative_variance >= threshold)[1] - 1
+      },
+      error = function(cond) {
+        stop(
+          "Check if correct variance threshold for principle components are inputted, should be numeric value between 0 and 1"
+        )
+      },
+      warning = function(cond) {
+        stop(
+          "Check if correct variance threshold for principle components are inputted, should be numeric value between 0 and 1"
+        )
+      })
+
+    } else{
+      # if threshold not inputted, use Kaiser's criterion
+      print(
+        "Both variance_explained_threshold and num_retained_component not inputted, use Kaiser's criterion for determination"
+      )
+      plot(
+        eigenvalues,
+        type = 'b',
+        main = "Scree Plot",
+        xlab = "Principal Component",
+        ylab = "Eigenvalue"
+      )
+
+      # Add a horizontal line at 1 (Kaiser's criterion)
+      abline(h = 1,
+             col = "red",
+             lty = 2)
+
+      # Add a vertical line at the elbow point
+      elbow_point <- which(diff(eigenvalues) < 0)[1]
+      abline(v = elbow_point,
+             col = "blue",
+             lty = 2)
+      retained = length(which(eigenvalues >= 1))
+    }
+  } else{
+    retained = as.integer(num_retained_component)
+    if (is.na(retained)) {
+      stop("Please enter correct number of principle components to retain")
+    }
+  }
+
+  if (!is.null(input_mz)) {
+    if ((length(input_mz) != ncol(resampled_mat)) |
+        (!is.numeric(input_mz))) {
+      stop(
+        "Please ensure input_mz has one-to-one correspondence with each column of the mass_matrix"
+      )
+    } else{
+      input_mz = input_mz
+    }
+  } else{
+    tryCatch({
+      input_mz = data.frame(cbind(
+        row_id = 1:length(colnames(resampled_mat)),
+        mz = as.numeric(colnames(resampled_mat))
+      ))
+    },
+    error = function(cond) {
+      stop(
+        "Check whether column names of the input matrix is correctly labelled as the m/z ratio"
+      )
+    },
+    warning = function(cond) {
+      stop(
+        "Check whether column names of the input matrix is correctly labelled as the m/z ratio"
+      )
+    })
+  }
+
+  #
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_db_adduct_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_formula_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_proc_db.R"))
+  #### Load the Cleaned and summarized DB ####
+  Chebi_db     = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/db_files/Chebi_1_names.rds"))
+  HMDB_db      = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/db_files/HMDB_1_names.rds"))
+
+  # Set the db that you want to search against
+  db = rbind(HMDB_db, Chebi_db)
+  # set which adducts you want to search for
+  adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/adduct_file.rds"))
+  if(is.null(ion_mode)){
+    stop("Please enter correct polarity:'positive' or 'negative'")
+  }else{
+    if (ion_mode == "positive") {
+      test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge >= 0)])
+    } else if (ion_mode == "negative") {
+      test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge <= 0)])
+    } 
+  } 
+  # Using Chris' pipeline for annotation
+  # 1) Filter DB by adduct.
+  db_1 = db_adduct_filter(db, test_add, polarity = ifelse(ion_mode == "positive",
+                                                          "pos", "neg"))
+
+  # 2) only select natural elements
+  db_2 = formula_filter(db_1)
+
+  # 3) search db against mz df return results
+  # Need to specify ppm error
+  # If ppm_error not specified, use function to estimate
+  # Set error tolerance
+  ppm_error = 1e6 / tof_resolution / sqrt(2 * log(2))
+  db_3 = proc_db(input_mz, db_2, ppm_error) %>% mutate(entry = str_split(Isomers,
+                                                                         pattern = "; "))
+  print("Query necessary data and establish pathway database")
+  input_id = lapply(db_3$entry, function(x) {
+    x = unlist(x)
+    index_hmdb = which(grepl(x, pattern = "HMDB"))
+    x[index_hmdb] = paste0("hmdb:", x[index_hmdb])
+    index_chebi = which(grepl(x, pattern = "CHEBI"))
+    x[index_chebi] = tolower(x[index_chebi])
+    return(x)
+  })
+  chem_props =readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/chem_props.rds"))
+  db_3 = db_3 %>% mutate(inputid = input_id)
+  rampid = c()
+  chem_source_id = unique(chem_props$chem_source_id)
+  pb = txtProgressBar(
+    min = 0,
+    max = nrow(db_3),
+    initial = 0,
+    style = 3
+  )
+  for (i in 1:nrow(db_3)) {
+    rampid[i] = (chem_props$ramp_id[which(chem_source_id %in% db_3$inputid[i])])[1]
+    setTxtProgressBar(pb, i)
+  }
+  close(pb)
+  db_3 = cbind(db_3, rampid)
+  print("Query finished")
+  ####################################################################################################
+
+  # get rank pathway database
+  print("Getting reference pathways")
+  analytehaspathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/analytehaspathway.rds"))
+  pathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/pathway.rds"))
+  source = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/source.rds"))
+  pathway_db = get_analytes_db(input_id,analytehaspathway,
+                               chem_props,pathway)
+  pathway_db = pathway_db[which(!duplicated(names(pathway_db)))]
+  # get names for the ranks
+  name_rank = lapply(input_mz$mz, function(x) {
+    return(unique(na.omit(db_3$rampid[which(db_3$observed_mz == x)])))
+  })
+
+  #Set progress bar
+
+  print("Runing set enrichment analysis")
+  pca_sea_list = list()
+  pb_new = txtProgressBar(
+    min = 0,
+    max = retained,
+    initial = 0,
+    style = 3
+  )
+  for (i in 1:retained) {
+    # get the absolute value and sign of the loading
+    loading = data.frame(cbind(
+      abs_loading = abs(pca[["rotation"]][, i]),
+      sign_loading = sign(pca[["rotation"]][, i])
+    )) %>% arrange(desc(abs_loading))
+    # run set enrichment analysis
+
+    ranks = unlist(lapply(1:length(pca[["rotation"]][, i]), function(x) {
+      pc_new = rep(pca[["rotation"]][x, i], times = length(name_rank[[x]]))
+      names(pc_new) = name_rank[[x]]
+      return(pc_new)
+    }))
+    ranks = ranks[which(!duplicated(names(ranks)))]
+    suppressWarnings({
+      gsea_result = fgsea(
+        pathways =  pathway_db,
+        stats = ranks,
+        minSize = 5,
+        maxSize = 500
+      ) %>% filter(pval <= p_val_threshold) %>% mutate(principle_component = paste0("PC", i)) %>%
+        mutate(leadingEdge_metabolites = lapply(leadingEdge, function(x) {
+          temp = unlist(x)
+          metabolites_name = unique(tolower(chem_props$common_name[which(chem_props$ramp_id %in% temp)]))
+          return(metabolites_name)
+        }))
+    })
+    setTxtProgressBar(pb_new, i)
+    # Make sure sign of loading is positive to make it positively correlate with the PC
+    pca_sea_list = list.append(pca_sea_list,
+                               gsea_result)
+  }
+  close(pb_new)
+  names(pca_sea_list) = paste0("PC", 1:retained)
+  
+
+  if (biplot == T) {
+    plot.new()
+    par(mfrow = c(2, 2))
+    par(mar = c(2, 2, 1, 1))
+    biplot(pca, choices = c(1, 2), cex = c(0.05, 0.8))
+    biplot(pca, choices = c(2, 3), cex = c(0.05, 0.8))
+    biplot(pca, choices = c(1, 3), cex = c(0.05, 0.8))
+  }
+  # return(list(pca = pca,
+  #                    pathway_enrichment_pc = pca_sea_list,
+  #                    new.width = as.integer(width/as.numeric(resampling_factor)),
+  #                    new.height = as.integer(height/as.numeric(resampling_factor))))
+  return = list(pca = pca,
+                      pathway_enrichment_pc = pca_sea_list,
+                      new.width = as.integer(width/as.numeric(resampling_factor)),
+                      new.height = as.integer(height/as.numeric(resampling_factor)))
+
+```
+
+```{r estimate_mz_resolution_error arguments}
+mass_matrix = mass_matrix
+matrix_molecule = "189.042593089"
+ion_mode = "positive"
+sparse = T
+use_colnames_as_mz = T
+mass_resolution = 30000
+mz_vector = NULL
+quantile = 0.9
+plot = T
+```
+
+
+```{r estimate_mz_resolution_error content}
+  #(1) Converting matrix to sparse matrix when necessary
+  require(Matrix)
+  if (sparse == T) {
+    print("Converting dense matrix to sparse matrix")
+    mass_matrix = Matrix(as.matrix(mass_matrix), sparse = TRUE)
+    print("Conversion finished")
+  }
+  #(2) Get lsit of m/z values
+  if (use_colnames_as_mz == T) {
+    tryCatch({
+      mz_list = as.numeric(colnames(mass_matrix))
+    },
+    error = function(cond) {
+      stop(
+        "Error occurred: ",
+        conditionMessage(cond),
+        message(
+          "Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
+              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"
+        )
+      )
+    },
+    warning = function(cond) {
+      stop(
+        "Error occurred: ",
+        conditionMessage(cond),
+        message(
+          "Please check whether the input matrix has correctnumeric  m/z ratio as colnames,
+              or try to set 'use_colnames_as_mz = T', and put in a vector of m/z ratios 'mz_vector' in the same order as the columns of the input matrix"
+        )
+      )
+    })
+  } else if (!is.null(mz_vector)) {
+    mz_list = as.numeric(mz_vector)
+  } else{
+    stop(
+      "Cannot find list of screened m/z ratioes.
+         Check if m/z ratio vector or colnames of input matrix is correctly input!"
+    )
+  }
+  #(3) query for all possible m/z for matrix molecule
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_db_adduct_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_formula_filter.R"))
+  source(paste0(dirname(system.file(package = "SpaMTP")),"/R/fct_proc_db.R"))
+  #### Load the Cleaned and summarized DB ####
+  # require krish's DB
+  print("Loading query databases...")
+  adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/adduct_file.rds"))
+  chem_props = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/chem_props.rds"))
+  print("Database loading finished.")
+
+  #(4) Determine the polarity for adducts
+
+  if (is.numeric(as.numeric(matrix_molecule)) &
+      (!is.na(as.numeric(matrix_molecule)))) {
+    matrix_molecule = as.numeric(matrix_molecule)
+  } else{
+    # query for the give id
+    matrix_molecule = as.numeric(chem_props$monoisotop_mass[which(grepl(
+      chem_props$chem_source_id,
+      pattern = matrix_molecule,
+      ignore.case = T
+    ))][1])
+    if (length(matrix_molecule) == 0) {
+      stop("Check if correct matrix molecule id is input")
+    }
+  }
+  if (ion_mode == "positive") {
+    positive_adducts = adduct_file[which(adduct_file$pol == "pos"), ]
+    formulas = gsub("([0-9])([A-Za-z])",
+                    "\\1*\\2",
+                    positive_adducts$ion.mass)
+    M = matrix_molecule
+    potential_mz = c(sapply(formulas, function(x)
+      eval(parse(text = x))))
+    names(potential_mz) = positive_adducts$adduct_name
+  } else if (ion_mode == "negative") {
+    negative_adducts = adduct_file[which(adduct_file$pol == "neg"), ]
+    formulas = gsub("([0-9])([A-Za-z])",
+                    "\\1*\\2",
+                    negative_adducts$ion.mass)
+    M = matrix_molecule
+    potential_mz = c(sapply(formulas, function(x)
+      eval(parse(text = x))))
+    names(potential_mz) = negative_adduct$adduct_name
+  } else{
+    print("Please enter the correct ion mode from following: 'positive' or 'negative'")
+  }
+  closest_peaks = lapply(potential_mz, function(x) {
+    id = which.min(abs(x - mz_list))
+    closest_mz = mz_list[id]
+    error_mz = (x - mz_list)[id]
+    error_ppm = abs(error_mz) / matrix_molecule * 1e6
+    closest_peak_intensity = mean(as.numeric(mass_matrix[, id]))
+    closest_return = c(
+      matched_mz_id = id,
+      closest_mz = closest_mz,
+      error_mz = error_mz,
+      error_ppm = error_ppm,
+      closest_peak_intensity =  closest_peak_intensity
+    )
+    return(closest_return)
+  })
+  # Calculate full_width at half height
+  fwhm = matrix_molecule / mass_resolution
+  intensities = Matrix::colSums(mass_matrix)
+  potential_matrix_peak_indices <-
+    which(intensities >= quantile(intensities, probs = quantile))
+
+  filtered_closest_peaks = as.data.frame(do.call(rbind, lapply(closest_peaks, function(x) {
+    if ((x[1] %in% potential_matrix_peak_indices) & abs(x[3]) <= 3 * fwhm) {
+      return(x)
+    } else{
+      return(NULL)
+    }
+  })))
+
+  if (nrow(filtered_closest_peaks) == 0) {
+    stop(
+      "Warnning: no peaks found with given conditions consider increase mass accuracy or decrease quantile.
+         Make sure you enter the correct matrix as well (The matrix should not be cleaned for background signals)"
+    )
+  } else{
+    # print result
+    require(ggplot2)
+    require(fitdistrplus)
+    # Plot histogram with fitted distribution
+    print("Plotting matched adducted molecules with their corresponding mass error")
+    plotdf  = cbind(filtered_closest_peaks,
+                    adduct_status = rownames(filtered_closest_peaks))
+    if (plot == T) {
+      suppressWarnings({
+        plot = ggplot(plotdf, aes(x = error_mz, y = closest_peak_intensity)) +
+          geom_histogram(
+            stat = "identity",
+            fill = "skyblue",
+            color = "black",
+            bins = 10
+          ) +
+          labs(x = "Error (m/z, unit: u)", y = "Peak Intensity") +
+          geom_text(
+            aes(
+              y = closest_peak_intensity,
+              label = paste0(
+                adduct_status,
+                "\n Error ppm:",
+                round(error_ppm,
+                      digits = 3)
+              )
+            ),
+            position = "stack",
+            vjust = -0.5,
+            size = 3.5,
+            color = "black"
+          ) +
+          geom_vline(
+            xintercept = 0,
+            linetype = "dashed",
+            color = "blue"
+          ) +
+          theme_minimal() + ylim(c(0, 1.3 * max(plotdf$closest_peak_intensity))) +
+          xlim(c(min(0,
+                     1.2 *
+                       min(
+                         plotdf$error_mz
+                       )),
+                 max(0, 1.2 *
+                       max(
+                         plotdf$error_mz
+                       ))))
+      })
+      suppressWarnings(print(plot))
+
+    }
+    print("Finished")
+    return(plotdf)
+  }

@@ -22,7 +22,6 @@ library(fields)
 #' @return kernel_size,resampling_factor,use_gaussian_blur,sigma: are the parameters that input by user
 
 
-
 svd_analysis = function(mass_matrix,
                                   width,
                                   height,
@@ -41,21 +40,21 @@ svd_analysis = function(mass_matrix,
   mass_matrix = Matrix(as.matrix(mass_matrix),
                        sparse = T)
   gc()
-
-
-  ##########################################################
+  
+  
+  
   ###################Gaussian blur##########################
-  ##########################################################
-
+  
+  
   if(use_gaussian_blur  == T & use_paralle == F){
     print("Running gaussian blur")
     require(utils)
     pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
     blur_matrix = matrix(nrow = width*height)
     for(i in 1:ncol(mass_matrix)){
-      temp_mz_matrix = matrix(mass_matrix[,i],
-                              ncol = width,
-                              nrow = height, byrow = T)
+      temp_mz_matrix = t(matrix(mass_matrix[,i],
+                                ncol = width,
+                                nrow = height, byrow = F))
       blured_temp = gaussian_blur(temp_mz_matrix,
                                   sigma = sigma,
                                   kernel_size = kernel_size,
@@ -69,7 +68,7 @@ svd_analysis = function(mass_matrix,
     gc()
     print("Guassian Blur finished")
   }
-
+  
   if(use_gaussian_blur == T & use_paralle == T){
     print("Running gaussian blur on parallel cores")
     require(parallel)
@@ -91,9 +90,9 @@ svd_analysis = function(mass_matrix,
                                      "sigma"), envir = environment())
     print("Running gaussian blur (Takes roughly 2 min on 16 cores processing 500 frames of 1000pix*1000pix matrices)")
     suppressWarnings({blur_list <- parLapply(clust, split(t(as.matrix(mass_matrix)),seq_len(nrow(t(as.matrix(mass_matrix))))), function(x){
-      temp_mz_matrix = matrix(x,
-                              ncol = width,
-                              nrow = height, byrow = T)
+      temp_mz_matrix = t(matrix(mass_matrix[,i],
+                                ncol = width,
+                                nrow = height, byrow = F))
       blured_temp = gaussian_blur(temp_mz_matrix,
                                   sigma = sigma,
                                   kernel_size = kernel_size,
@@ -110,55 +109,32 @@ svd_analysis = function(mass_matrix,
   ##########################################################
   #####################Resampling###########################
   ##########################################################
-  rescale <- function(x, newrange=range(x)){
-    xrange <- range(x)
-    mfac <- (newrange[2]-newrange[1])/(xrange[2]-xrange[1])
-    newrange[1]+(x-xrange[1])*mfac
-  }
-
-  ResizeMat <- function(mat, ndim=dim(mat)){
-    if(!require(fields)) stop("`fields` required.")
-
-    # input object
-    odim <- dim(mat)
-    obj <- list(x= 1:odim[1], y=1:odim[2], z= mat)
-
-    # output object
-    ans <- matrix(NA, nrow=ndim[1], ncol=ndim[2])
-    ndim <- dim(ans)
-
-    # rescaling
-    ncord <- as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
-    loc <- ncord
-    loc[,1] = rescale(ncord[,1], c(1,odim[1]))
-    loc[,2] = rescale(ncord[,2], c(1,odim[2]))
-
-    # interpolation
-    ans[ncord] <- interp.surface(obj, loc)
-    ans
-  }
-
+  
   if(use_gaussian_blur == T){
     blur_matrix = Matrix::Matrix(blur_matrix,
                                  sparse = T)
+    rm(mass_matrix)
+    gc()
   }else{
     blur_matrix = mass_matrix
+    rm(mass_matrix)
+    gc
   }
-
+  
   if(!is.null(resampling_factor)){
     print("Running matrix resampling")
-    pb = txtProgressBar(min = 0, max = ncol(mass_matrix), initial = 0, style = 3)
+    pb = txtProgressBar(min = 0, max = ncol(blur_matrix), initial = 0, style = 3)
     if(!is.numeric(resampling_factor)){
       stop("Please enter correct resampling_factor")
     }
     new.width = as.integer(width/resampling_factor)
     new.height = as.integer(height/resampling_factor)
-
+    
     resampled_mat = matrix(nrow =  new.height*new.width)
     for(i in 1:ncol(blur_matrix)){
       temp_mz_matrix = matrix(blur_matrix[,i],
                               ncol = width,
-                              nrow = height, byrow = F)
+                              nrow = height, byrow = T)
       resampled_temp = ResizeMat(temp_mz_matrix, c(new.width,
                                                    new.height))
       resampled_mat = cbind(resampled_mat,as.vector(resampled_temp))
@@ -169,9 +145,14 @@ svd_analysis = function(mass_matrix,
     resampled_mat = resampled_mat[,-1]
     colnames(resampled_mat) = colnames(blur_matrix)
     print("Resampling finished!")
+    rm(blur_matrix)
+    gc()
+  }else{
+    resampled_mat = blur_matrix
+    rm(blur_matrix)
     gc()
   }
-
+  
   # if(!is.null(resampling_factor) & use_paralle == T){
   #   if(!is.numeric(resampling_factor)){
   #     stop("Please enter correct resampling_factor")
@@ -203,7 +184,7 @@ svd_analysis = function(mass_matrix,
   #   colnames(resampled_mat) =colnames(blur_matrix)
   #   print("Resampling finished!")
   # }
-
+  
   ###################################################
   #####################SVD###########################
   ###################################################
@@ -213,7 +194,7 @@ svd_analysis = function(mass_matrix,
     new.height = height
     sigma = NULL
   }
-
+  
   if(randomised_svd == F){
     print("Running exact matrix single value decomposition")
     svd = svd(resampled_mat)
@@ -269,11 +250,11 @@ svd_analysis = function(mass_matrix,
     # layout(mat = layout.matrix,
     #        heights = rep(1.5, times = nrow(layout.matrix)), # Heights of the two rows
     #        widths = c(2, 2))
-    par(mfrow = c(ceiling(number_to_plot/2), 2))
+    par(mfrow = c(ceiling(min(number_to_plot,retain)/2), 2))
     par(mar = c(2, 2, 1, 1))
-    for(i in 1:number_to_plot){
+    for(i in 1:min(number_to_plot,retain)){
       plot_matrix = matrix(resampled_mat[,order(value_matrix,decreasing = T)[i]],
-                           nrow = new.height, ncol = new.width, byrow = F)
+                           nrow = new.height, ncol = new.width, byrow = T)
       image = fields::image.plot(plot_matrix, useRaster = T,
                                  main = paste0("m/z:",colnames(resampled_mat[,order(value_matrix,decreasing = T)])[i]),axes=FALSE, xlab = "", ylab = "")
       image
@@ -292,6 +273,40 @@ svd_analysis = function(mass_matrix,
                        new_height = new.height,
                        sigma = sigma,
                        use_gaussian_blur = use_gaussian_blur)
+  rm(resampled_mat)
   gc()
   return(returned_item)
+}
+
+
+
+
+# rescale is a function to rescale the matrix to a new dimension
+rescale <- function(x, newrange=range(x)){
+  xrange <- range(x)
+  mfac <- (newrange[2]-newrange[1])/(xrange[2]-xrange[1])
+  newrange[1]+(x-xrange[1])*mfac
+}
+
+# ResizeMat is a function that uses interpolation to merge pixel information
+ResizeMat <- function(mat, ndim=dim(mat)){
+  if(!require(fields)) stop("`fields` required.")
+  
+  # input object
+  odim <- dim(mat)
+  obj <- list(x= 1:odim[1], y=1:odim[2], z= mat)
+  
+  # output object
+  ans <- matrix(NA, nrow=ndim[1], ncol=ndim[2])
+  ndim <- dim(ans)
+  
+  # rescaling
+  ncord <- as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
+  loc <- ncord
+  loc[,1] = rescale(ncord[,1], c(1,odim[1]))
+  loc[,2] = rescale(ncord[,2], c(1,odim[2]))
+  
+  # interpolation
+  ans[ncord] <- interp.surface(obj, loc)
+  ans
 }

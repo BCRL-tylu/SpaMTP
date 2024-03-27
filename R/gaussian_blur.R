@@ -34,7 +34,7 @@ gaussian_blur <- function(matrix, sigma = 1,
     # Define the boundaries for convolution
     row_index = (i-size):(i+size)
       row_index[which(row_index<=0)]= abs(row_index[which(row_index<=0)]-1-i)
-    for (j in 1:size)) {
+    for (j in 1:size) {
       col_index = (j-size):(j+size)
       col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
       # Get the unprocessed kernel
@@ -49,7 +49,7 @@ gaussian_blur <- function(matrix, sigma = 1,
     # Define the boundaries for convolution
     row_index = (i-size):(i+size)
     row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
-    for (j in 1:size)) {
+    for (j in 1:size) {
       col_index = (j-size):(j+size)
       col_index[which(col_index<=0)]= abs(col_index[which(col_index<=0)]-1-j) 
       # Get the unprocessed kernel
@@ -65,7 +65,7 @@ gaussian_blur <- function(matrix, sigma = 1,
     # Define the boundaries for convolution
     row_index = (i-size):(i+size)
     row_index[which(row_index>nrow(matrix))]= 2*nrow(matrix) - row_index[which(row_index>nrow(matrix))] 
-    for (j in (ncol(matrix)-size+):ncol(matrix))) {
+    for (j in (ncol(matrix)-size+1):ncol(matrix)) {
       col_index = (j-size):(j+size)
       col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
       # Get the unprocessed kernel
@@ -80,7 +80,7 @@ gaussian_blur <- function(matrix, sigma = 1,
     # Define the boundaries for convolution
     row_index = (i-size):(i+size)
     row_index[which(row_index<=0)]= abs(row_index[which(row_index<=0)]-1-i)
-    for (j in (ncol(matrix)-size+):ncol(matrix))) {
+    for (j in (ncol(matrix)-size+1):ncol(matrix)) {
       col_index = (j-size):(j+size)
       col_index[which(col_index>ncol(matrix))]= 2*ncol(matrix) - col_index[which(col_index>ncol(matrix))] 
       # Get the unprocessed kernel

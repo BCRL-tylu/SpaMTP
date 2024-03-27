@@ -5,13 +5,13 @@ library(rlist)
 library(stringr)
 library(fgsea)
 library(pbapply)
+
 #' @description
 #' @param mass_matrix is a matrix like object with each row corresponding to a pixel, and each column corresponding to a m/z value (Colnames = m/z values), support sparse/dense matrix,m each cell is the intensity of at the pixel; Note that the mass matrix should be half-processed, which means not filtered against any background signals, but undergoes normalization and baseline correction
 #' @param width is the width of each imaging dimension, in pixels
 #' @param height is the height of each imaging dimension, in pixels
 #' @param ppm_error is the parts-per-million error tolerance of matching m/z value with potential metabolites
 #' @param ion_mode is only needed when ppm_error is not specified, goes to function estimate_mz_resolution_error will be used to access the ppm_error
-#' @param matrix_molecule is only needed when ppm_error is not specified, goes to function estimate_mz_resolution_error will be used to access the ppm_error
 #' @param tof_resolution is the tof resolution of the instrument used for MALDI run, calculated by ion (ion mass,m/z)/(Full width at half height)
 #' @param input_mz is used when mass_matrix doesn't have the column names to be the m/z value, it a list of m/z values with one-to-one correspondence with each column of the mass_matrix
 #' @param num_retained_component is an integer value to indicated preferred number of PCs to retain
@@ -29,7 +29,6 @@ principal_component_pathway_analysis = function(mass_matrix,
                                                 width,
                                                 height,
                                                 ppm_error = NULL,
-                                                matrix_molecule = NULL,
                                                 ion_mode = NULL,
                                                 tof_resolution = 30000,
                                                 input_mz = NULL,
@@ -38,37 +37,6 @@ principal_component_pathway_analysis = function(mass_matrix,
                                                 resampling_factor = 2,
                                                 p_val_threshold = 0.05,
                                                 biplot = F) {
-  rescale <- function(x, newrange = range(x)) {
-    xrange <- range(x)
-    mfac <- (newrange[2] - newrange[1]) / (xrange[2] - xrange[1])
-    newrange[1] + (x - xrange[1]) * mfac
-  }
-
-  ResizeMat <- function(mat, ndim = dim(mat)) {
-    if (!require(fields))
-      stop("`fields` required.")
-
-    # input object
-    odim <- dim(mat)
-    obj <- list(x = 1:odim[1],
-                y = 1:odim[2],
-                z = mat)
-
-    # output object
-    ans <- matrix(NA, nrow = ndim[1], ncol = ndim[2])
-    ndim <- dim(ans)
-
-    # rescaling
-    ncord <-
-      as.matrix(expand.grid(seq_len(ndim[1]), seq_len(ndim[2])))
-    loc <- ncord
-    loc[, 1] = rescale(ncord[, 1], c(1, odim[1]))
-    loc[, 2] = rescale(ncord[, 2], c(1, odim[2]))
-
-    # interpolation
-    ans[ncord] <- interp.surface(obj, loc)
-    ans
-  }
   # PCA analysis
   print("Scaling original matrix")
   mass_matrix = Matrix(as.matrix(mass_matrix), sparse = T)
@@ -127,11 +95,14 @@ principal_component_pathway_analysis = function(mass_matrix,
     pc = do.call(cbind,pc)
 
   # make pca object
+    colnames(eigenvectors) = paste0("PC",1:ncol(eigenvectors))
+    rownames(eigenvectors) = colnames(resampled_mat)
   pca = list(sdev = sqrt(eigenvalues),
              rotation = eigenvectors,
              center = Matrix::colSums(resampled_mat)/nrow(resampled_mat),
              scale = FALSE,
              x = pc)
+  pca = list_to_pprcomp(pca)
   print("PCA finished")
 
   gc()
@@ -207,7 +178,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   }
 
   if (!is.null(input_mz)) {
-    if ((length(input_mz) != ncol(mass_matrix)) |
+    if ((length(input_mz) != ncol(resampled_mat)) |
         (!is.numeric(input_mz))) {
       stop(
         "Please ensure input_mz has one-to-one correspondence with each column of the mass_matrix"
@@ -218,8 +189,8 @@ principal_component_pathway_analysis = function(mass_matrix,
   } else{
     tryCatch({
       input_mz = data.frame(cbind(
-        row_id = 1:length(colnames(mass_matrix)),
-        mz = as.numeric(colnames(mass_matrix))
+        row_id = 1:length(colnames(resampled_mat)),
+        mz = as.numeric(colnames(resampled_mat))
       ))
     },
     error = function(cond) {
@@ -246,13 +217,15 @@ principal_component_pathway_analysis = function(mass_matrix,
   db = rbind(HMDB_db, Chebi_db)
   # set which adducts you want to search for
   adduct_file = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/inst/adduct_file.rds"))
-  if (ion_mode == "positive") {
-    test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge >= 0)])
-  } else if (ion_mode == "negative") {
-    test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge <= 0)])
-  } else{
-    stop("Please enter correct polarity")
-  }
+  if(is.null(ion_mode)){
+    stop("Please enter correct polarity:'positive' or 'negative")
+  }else{
+    if (ion_mode == "positive") {
+      test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge >= 0)])
+    } else if (ion_mode == "negative") {
+      test_add = sub(" ","",adduct_file$adduct_name[which(adduct_file$charge <= 0)])
+    } 
+  } 
   # Using Chris' pipeline for annotation
   # 1) Filter DB by adduct.
   db_1 = db_adduct_filter(db, test_add, polarity = ifelse(ion_mode == "positive",
@@ -264,28 +237,6 @@ principal_component_pathway_analysis = function(mass_matrix,
   # 3) search db against mz df return results
   # Need to specify ppm error
   # If ppm_error not specified, use function to estimate
-
-  if (is.null(ppm_error)) {
-    if(is.null(matrix_molecule)){
-      stop("Please enter correct matrix molecule, either in molecular mass (unit au) or entries")
-    }else{
-      ppm_error_df = estimate_mz_resolution_error(
-        mass_matrix = resampled_mat,
-        ion_mode = ion_mode,
-        matrix_molecule = matrix_molecule,
-        mass_resolution = tof_resolution,
-        plot = F
-      ) 
-    }
-    if (nrow(ppm_error_df) == 0) {
-      stop(
-        "No close metabolites find around given matrix mass, please specify a ppm_error, e.g 20"
-      )
-    } else{
-      print("Successfully found peaks by given matrix molecule, ppm_error estimated")
-      ppm_error_mean = mean(ppm_error_df$error_ppm)
-    }
-  }
   # Set error tolerance
   ppm_error = 1e6 / tof_resolution / sqrt(2 * log(2))
   db_3 = proc_db(input_mz, db_2, ppm_error) %>% mutate(entry = str_split(Isomers,
@@ -317,25 +268,7 @@ principal_component_pathway_analysis = function(mass_matrix,
   db_3 = cbind(db_3, rampid)
   print("Query finished")
   ####################################################################################################
-  get_analytes_db = function(input_id,analytehaspathway,
-                             chem_props,pathway) {
 
-    rampid = chem_props$ramp_id[which(chem_props$chem_source_id %in% unique(input_id))]
-    #
-    pathway_ids = analytehaspathway$pathwayRampId[which(rampid %in% analytehaspathway$rampId)]
-
-    analytes_db = lapply(pathway_ids, function(x) {
-      content = analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == x)]
-      content = content[which(grepl(content, pattern = "RAMP_C"))]
-      return(content)
-    })
-    analytes_db_name = unlist(lapply(pathway_ids, function(x) {
-      name = pathway$pathwayName[which(pathway$pathwayRampId == x)]
-      return(name)
-    }))
-    names(analytes_db) = analytes_db_name
-    return(analytes_db)
-  }
   # get rank pathway database
   print("Getting reference pathways")
   analytehaspathway = readRDS(paste0(dirname(system.file(package = "SpaMTP")),"/data/analytehaspathway.rds"))
@@ -349,6 +282,9 @@ principal_component_pathway_analysis = function(mass_matrix,
     return(unique(na.omit(db_3$rampid[which(db_3$observed_mz == x)])))
   })
 
+
+  print("Runing set enrichment analysis")
+  pca_sea_list = list()
   #Set progress bar
   pb_new = txtProgressBar(
     min = 0,
@@ -356,9 +292,6 @@ principal_component_pathway_analysis = function(mass_matrix,
     initial = 0,
     style = 3
   )
-  print("Runing set enrichment analysis")
-  pca_sea_list = list()
-
   for (i in 1:retained) {
     # get the absolute value and sign of the loading
     loading = data.frame(cbind(
@@ -405,4 +338,45 @@ principal_component_pathway_analysis = function(mass_matrix,
                      pathway_enrichment_pc = pca_sea_list,
                      new.width = as.integer(width/as.numeric(resampling_factor)),
                      new.height = as.integer(height/as.numeric(resampling_factor))))
+}
+
+#Helper function get_analytes_db
+
+# Which help to build a pathway db based on detected metabolites
+get_analytes_db = function(input_id,analytehaspathway,
+                           chem_props,pathway) {
+  
+  rampid = chem_props$ramp_id[which(chem_props$chem_source_id %in% unique(input_id))]
+  #
+  pathway_ids = analytehaspathway$pathwayRampId[which(rampid %in% analytehaspathway$rampId)]
+  
+  analytes_db = lapply(pathway_ids, function(x) {
+    content = analytehaspathway$rampId[which(analytehaspathway$pathwayRampId == x)]
+    content = content[which(grepl(content, pattern = "RAMP_C"))]
+    return(content)
+  })
+  analytes_db_name = unlist(lapply(pathway_ids, function(x) {
+    name = pathway$pathwayName[which(pathway$pathwayRampId == x)]
+    return(name)
+  }))
+  names(analytes_db) = analytes_db_name
+  return(analytes_db)
+}
+
+#Helper function list_to_pprcomp
+
+# Which help to build a pathway db based on detected metabolites
+list_to_pprcomp <- function(lst) {
+  # Create an empty object with class pprcomp
+  obj <- structure(list(), class = "prcomp")
+  # Assign components from the list to the object
+  obj$sdev <- lst$sdev
+  obj$rotation <- lst$rotation
+  obj$center <- lst$center
+  obj$scale <- lst$scale
+  obj$x <- lst$x
+  # Add other components as needed
+  
+  # Return the constructed pprcomp object
+  return(obj)
 }
